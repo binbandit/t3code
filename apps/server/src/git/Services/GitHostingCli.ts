@@ -9,6 +9,8 @@
 import { ServiceMap } from "effect";
 import type { Effect } from "effect";
 
+import type { GitHostingPlatform } from "@t3tools/contracts";
+
 import type { ProcessRunResult } from "../../processRunner";
 import type { GitHostingCliError } from "../Errors.ts";
 
@@ -51,7 +53,7 @@ export interface GitHostingCliShape {
    */
   readonly listOpenPullRequests: (input: {
     readonly cwd: string;
-    readonly headBranch: string;
+    readonly headSelector: string;
     readonly limit?: number;
   }) => Effect.Effect<ReadonlyArray<PullRequestSummary>, GitHostingCliError>;
 
@@ -77,7 +79,7 @@ export interface GitHostingCliShape {
   readonly createPullRequest: (input: {
     readonly cwd: string;
     readonly baseBranch: string;
-    readonly headBranch: string;
+    readonly headSelector: string;
     readonly title: string;
     readonly bodyFile: string;
   }) => Effect.Effect<void, GitHostingCliError>;
@@ -97,6 +99,12 @@ export interface GitHostingCliShape {
     readonly reference: string;
     readonly force?: boolean;
   }) => Effect.Effect<void, GitHostingCliError>;
+
+  /**
+   * Return the detected hosting platform for the given repository.
+   * Synchronous — the result is cached after first detection.
+   */
+  readonly getHostingPlatform: (cwd: string) => GitHostingPlatform;
 }
 
 /**

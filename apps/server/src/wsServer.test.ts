@@ -1635,6 +1635,7 @@ describe("WebSocket Server", () => {
       aheadCount: 0,
       behindCount: 0,
       pr: null,
+      hostingPlatform: "github" as const,
     };
 
     const status = vi.fn(() => Effect.succeed(statusResult));

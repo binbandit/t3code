@@ -125,6 +125,9 @@ const GitStatusPr = Schema.Struct({
   state: GitStatusPrState,
 });
 
+export const GitHostingPlatform = Schema.Literal("github", "gitlab");
+export type GitHostingPlatform = typeof GitHostingPlatform.Type;
+
 export const GitStatusResult = Schema.Struct({
   branch: TrimmedNonEmptyStringSchema.pipe(Schema.NullOr),
   hasWorkingTreeChanges: Schema.Boolean,
@@ -143,6 +146,7 @@ export const GitStatusResult = Schema.Struct({
   aheadCount: NonNegativeInt,
   behindCount: NonNegativeInt,
   pr: Schema.NullOr(GitStatusPr),
+  hostingPlatform: GitHostingPlatform,
 });
 export type GitStatusResult = typeof GitStatusResult.Type;
 

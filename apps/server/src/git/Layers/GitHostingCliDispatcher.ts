@@ -227,7 +227,7 @@ const makeGitHostingCliDispatcher = Effect.gen(function* () {
               "mr",
               "list",
               "--source-branch",
-              input.headBranch,
+              input.headSelector,
               "--per-page",
               String(input.limit ?? 1),
               "--output",
@@ -353,7 +353,7 @@ const makeGitHostingCliDispatcher = Effect.gen(function* () {
               "--target-branch",
               input.baseBranch,
               "--source-branch",
-              input.headBranch,
+              input.headSelector,
               "--title",
               input.title,
               "--description",
@@ -413,6 +413,8 @@ const makeGitHostingCliDispatcher = Effect.gen(function* () {
         catch: (error) => normalizeGitLabError("checkoutPullRequest", error),
       }).pipe(Effect.asVoid);
     },
+
+    getHostingPlatform: (cwd) => detectHostingProvider(cwd),
   };
 
   return service;
