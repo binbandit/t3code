@@ -65,6 +65,51 @@ describe("threadSelectionStore", () => {
     });
   });
 
+  describe("setAnchor", () => {
+    it("sets anchor without adding to selection", () => {
+      useThreadSelectionStore.getState().setAnchor(THREAD_B);
+
+      const state = useThreadSelectionStore.getState();
+      expect(state.anchorThreadId).toBe(THREAD_B);
+      expect(state.selectedThreadIds.size).toBe(0);
+    });
+
+    it("enables range select from a plain-click anchor", () => {
+      const store = useThreadSelectionStore.getState();
+      store.setAnchor(THREAD_B); // simulate plain-click navigate to B
+      store.rangeSelectTo(THREAD_D, ORDERED); // shift-click D
+
+      const state = useThreadSelectionStore.getState();
+      expect(state.selectedThreadIds.has(THREAD_B)).toBe(true);
+      expect(state.selectedThreadIds.has(THREAD_C)).toBe(true);
+      expect(state.selectedThreadIds.has(THREAD_D)).toBe(true);
+      expect(state.selectedThreadIds.size).toBe(3);
+    });
+
+    it("is a no-op when anchor is already set to the same thread", () => {
+      const store = useThreadSelectionStore.getState();
+      store.setAnchor(THREAD_B);
+      const stateBefore = useThreadSelectionStore.getState();
+      store.setAnchor(THREAD_B);
+      const stateAfter = useThreadSelectionStore.getState();
+
+      // Should be referentially the same (no unnecessary re-render)
+      expect(stateAfter).toBe(stateBefore);
+    });
+
+    it("survives clearSelection followed by setAnchor", () => {
+      const store = useThreadSelectionStore.getState();
+      store.toggleThread(THREAD_A);
+      store.toggleThread(THREAD_B);
+      store.clearSelection();
+      store.setAnchor(THREAD_C);
+
+      const state = useThreadSelectionStore.getState();
+      expect(state.anchorThreadId).toBe(THREAD_C);
+      expect(state.selectedThreadIds.size).toBe(0);
+    });
+  });
+
   describe("rangeSelectTo", () => {
     it("selects a single thread when no anchor exists", () => {
       useThreadSelectionStore.getState().rangeSelectTo(THREAD_C, ORDERED);

@@ -307,6 +307,7 @@ export default function Sidebar() {
   const rangeSelectTo = useThreadSelectionStore((s) => s.rangeSelectTo);
   const clearSelection = useThreadSelectionStore((s) => s.clearSelection);
   const removeFromSelection = useThreadSelectionStore((s) => s.removeFromSelection);
+  const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
   const shouldBrowseForProjectImmediately = isElectron;
   const shouldShowProjectPathEntry = addingProject && !shouldBrowseForProjectImmediately;
   const pendingApprovalByThreadId = useMemo(() => {
@@ -883,16 +884,17 @@ export default function Sidebar() {
         return;
       }
 
-      // Plain click — clear selection and navigate
+      // Plain click — clear selection, set anchor for future shift-clicks, and navigate
       if (selectedThreadIds.size > 0) {
         clearSelection();
       }
+      setSelectionAnchor(threadId);
       void navigate({
         to: "/$threadId",
         params: { threadId },
       });
     },
-    [clearSelection, navigate, rangeSelectTo, selectedThreadIds.size, toggleThreadSelection],
+    [clearSelection, navigate, rangeSelectTo, selectedThreadIds.size, setSelectionAnchor, toggleThreadSelection],
   );
 
   const handleProjectContextMenu = useCallback(
@@ -1007,9 +1009,12 @@ export default function Sidebar() {
         event.stopPropagation();
         return;
       }
+      if (selectedThreadIds.size > 0) {
+        clearSelection();
+      }
       toggleProject(projectId);
     },
-    [toggleProject],
+    [clearSelection, selectedThreadIds.size, toggleProject],
   );
 
   const handleProjectTitleKeyDown = useCallback(
@@ -1056,9 +1061,18 @@ export default function Sidebar() {
       });
     };
 
+    const onMouseDown = (event: globalThis.MouseEvent) => {
+      if (selectedThreadIds.size === 0) return;
+      const target = event.target as HTMLElement;
+      if (target.closest("[data-thread-item]")) return;
+      clearSelection();
+    };
+
     window.addEventListener("keydown", onWindowKeyDown);
+    window.addEventListener("mousedown", onMouseDown);
     return () => {
       window.removeEventListener("keydown", onWindowKeyDown);
+      window.removeEventListener("mousedown", onMouseDown);
     };
   }, [clearSelection, getDraftThread, handleNewThread, keybindings, projects, routeThreadId, selectedThreadIds.size, threads]);
 
@@ -1463,7 +1477,7 @@ export default function Sidebar() {
                           </div>
 
                           <CollapsibleContent keepMounted>
-                            <SidebarMenuSub className="mx-1 my-0 w-full translate-x-0 gap-0 px-1.5 py-0">
+                            <SidebarMenuSub className="mx-1 my-0 w-full translate-x-0 gap-0.5 px-1.5 py-0">
                                 {visibleThreads.map((thread) => {
                                   const isActive = routeThreadId === thread.id;
                                   const isSelected = selectedThreadIds.has(thread.id);
@@ -1480,15 +1494,17 @@ export default function Sidebar() {
                                   );
 
                                   return (
-                                    <SidebarMenuSubItem key={thread.id} className="w-full">
+                                    <SidebarMenuSubItem key={thread.id} className="w-full" data-thread-item>
                                       <SidebarMenuSubButton
                                         render={<div role="button" tabIndex={0} />}
                                         size="sm"
                                         isActive={isActive}
-                                        className={`h-7 w-full translate-x-0 cursor-default justify-start px-2 text-left hover:bg-accent hover:text-foreground ${
-                                          isHighlighted
-                                            ? "bg-accent/85 text-foreground font-medium ring-1 ring-border/70 dark:bg-accent/55 dark:ring-border/50"
-                                            : "text-muted-foreground"
+                                        className={`h-7 w-full translate-x-0 cursor-default justify-start px-2 text-left select-none hover:bg-accent hover:text-foreground focus-visible:ring-0 ${
+                                          isSelected
+                                            ? "bg-primary/15 text-foreground dark:bg-primary/10"
+                                            : isActive
+                                              ? "bg-accent/85 text-foreground font-medium dark:bg-accent/55"
+                                              : "text-muted-foreground"
                                         }`}
                                         onClick={(event) => {
                                           handleThreadClick(event, thread.id, orderedProjectThreadIds);
@@ -1496,6 +1512,10 @@ export default function Sidebar() {
                                         onKeyDown={(event) => {
                                           if (event.key !== "Enter" && event.key !== " ") return;
                                           event.preventDefault();
+                                          if (selectedThreadIds.size > 0) {
+                                            clearSelection();
+                                          }
+                                          setSelectionAnchor(thread.id);
                                           void navigate({
                                             to: "/$threadId",
                                             params: { threadId: thread.id },

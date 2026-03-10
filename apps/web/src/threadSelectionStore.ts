@@ -28,6 +28,8 @@ interface ThreadSelectionActions {
   clearSelection: () => void;
   /** Remove specific thread IDs from the selection (e.g. after deletion). */
   removeFromSelection: (threadIds: readonly ThreadId[]) => void;
+  /** Set the anchor thread without adding it to the selection (e.g. on plain-click navigate). */
+  setAnchor: (threadId: ThreadId) => void;
   /** Check if any threads are selected. */
   hasSelection: () => boolean;
 }
@@ -92,6 +94,11 @@ export const useThreadSelectionStore = create<ThreadSelectionStore>((set, get) =
     const state = get();
     if (state.selectedThreadIds.size === 0 && state.anchorThreadId === null) return;
     set({ selectedThreadIds: EMPTY_SET, anchorThreadId: null });
+  },
+
+  setAnchor: (threadId) => {
+    if (get().anchorThreadId === threadId) return;
+    set({ anchorThreadId: threadId });
   },
 
   removeFromSelection: (threadIds) => {
