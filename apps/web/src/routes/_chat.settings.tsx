@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useDebouncedValue } from "@tanstack/react-pacer";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { type ProviderKind } from "@t3tools/contracts";
 import { getModelOptions, normalizeModelSlug } from "@t3tools/shared/model";
@@ -7,7 +8,10 @@ import { getModelOptions, normalizeModelSlug } from "@t3tools/shared/model";
 import { MAX_CUSTOM_MODEL_LENGTH, useAppSettings } from "../appSettings";
 import { isElectron } from "../env";
 import { useTheme } from "../hooks/useTheme";
-import { serverConfigQueryOptions } from "../lib/serverReactQuery";
+import {
+  serverConfigQueryOptions,
+  serverRecheckProviderHealthMutationOptions,
+} from "../lib/serverReactQuery";
 import { ensureNativeApi } from "../nativeApi";
 import { preferredTerminalEditor } from "../terminal-links";
 import { Button } from "../components/ui/button";
@@ -83,6 +87,7 @@ function patchCustomModels(provider: ProviderKind, models: string[]) {
 function SettingsRouteView() {
   const { theme, setTheme, resolvedTheme } = useTheme();
   const { settings, defaults, updateSettings } = useAppSettings();
+  const queryClient = useQueryClient();
   const serverConfigQuery = useQuery(serverConfigQueryOptions());
   const [isOpeningKeybindings, setIsOpeningKeybindings] = useState(false);
   const [openKeybindingsError, setOpenKeybindingsError] = useState<string | null>(null);
@@ -100,39 +105,19 @@ function SettingsRouteView() {
   const keybindingsConfigPath = serverConfigQuery.data?.keybindingsConfigPath ?? null;
 
   // Re-run server-side provider health check when the binary path setting changes.
-  const recheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const lastRecheckedPathRef = useRef<string | undefined>(undefined);
+  const [debouncedBinaryPath] = useDebouncedValue(codexBinaryPath, { wait: 600 });
+  const recheckHealthMutation = useMutation(
+    serverRecheckProviderHealthMutationOptions({ queryClient }),
+  );
+  const recheckHealth = recheckHealthMutation.mutate;
+  const hasMountedRef = useRef(false);
   useEffect(() => {
-    // Skip the initial mount — only recheck on actual changes.
-    if (lastRecheckedPathRef.current === undefined) {
-      lastRecheckedPathRef.current = codexBinaryPath;
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
       return;
     }
-    if (codexBinaryPath === lastRecheckedPathRef.current) {
-      return;
-    }
-    lastRecheckedPathRef.current = codexBinaryPath;
-
-    if (recheckTimerRef.current) {
-      clearTimeout(recheckTimerRef.current);
-    }
-    recheckTimerRef.current = setTimeout(() => {
-      const api = ensureNativeApi();
-      void api.server
-        .recheckProviderHealth({
-          codexBinaryPath: codexBinaryPath || undefined,
-        })
-        .catch(() => {
-          // Best-effort; banner will update via the push if successful.
-        });
-    }, 600);
-
-    return () => {
-      if (recheckTimerRef.current) {
-        clearTimeout(recheckTimerRef.current);
-      }
-    };
-  }, [codexBinaryPath]);
+    recheckHealth(debouncedBinaryPath || undefined);
+  }, [debouncedBinaryPath, recheckHealth]);
 
   const openKeybindingsFile = useCallback(() => {
     if (!keybindingsConfigPath) return;
