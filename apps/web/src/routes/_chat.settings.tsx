@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { type ProviderKind } from "@t3tools/contracts";
 import { getModelOptions, normalizeModelSlug } from "@t3tools/shared/model";
 
@@ -98,6 +98,41 @@ function SettingsRouteView() {
   const codexBinaryPath = settings.codexBinaryPath;
   const codexHomePath = settings.codexHomePath;
   const keybindingsConfigPath = serverConfigQuery.data?.keybindingsConfigPath ?? null;
+
+  // Re-run server-side provider health check when the binary path setting changes.
+  const recheckTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastRecheckedPathRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    // Skip the initial mount — only recheck on actual changes.
+    if (lastRecheckedPathRef.current === undefined) {
+      lastRecheckedPathRef.current = codexBinaryPath;
+      return;
+    }
+    if (codexBinaryPath === lastRecheckedPathRef.current) {
+      return;
+    }
+    lastRecheckedPathRef.current = codexBinaryPath;
+
+    if (recheckTimerRef.current) {
+      clearTimeout(recheckTimerRef.current);
+    }
+    recheckTimerRef.current = setTimeout(() => {
+      const api = ensureNativeApi();
+      void api.server
+        .recheckProviderHealth({
+          codexBinaryPath: codexBinaryPath || undefined,
+        })
+        .catch(() => {
+          // Best-effort; banner will update via the push if successful.
+        });
+    }, 600);
+
+    return () => {
+      if (recheckTimerRef.current) {
+        clearTimeout(recheckTimerRef.current);
+      }
+    };
+  }, [codexBinaryPath]);
 
   const openKeybindingsFile = useCallback(() => {
     if (!keybindingsConfigPath) return;
