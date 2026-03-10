@@ -420,6 +420,8 @@ export const ProviderHealthLive = Layer.effect(
   ProviderHealth,
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+    const fileSystem = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
     const statusesRef = yield* Ref.make<ReadonlyArray<ServerProviderStatus>>([]);
 
     const runCheck = (binaryPath?: string) =>
@@ -427,6 +429,8 @@ export const ProviderHealthLive = Layer.effect(
         Effect.map(Array.of),
         Effect.tap((statuses) => Ref.set(statusesRef, statuses)),
         Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
+        Effect.provideService(FileSystem.FileSystem, fileSystem),
+        Effect.provideService(Path.Path, path),
       );
 
     // Run the initial health check in a background fiber.
