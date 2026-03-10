@@ -8,15 +8,13 @@
  *
  * @module ProviderHealthLive
  */
-import * as fs from "node:fs";
 import * as OS from "node:os";
-import * as NodePath from "node:path";
 import type {
   ServerProviderAuthStatus,
   ServerProviderStatus,
   ServerProviderStatusState,
 } from "@t3tools/contracts";
-import { Array, Effect, Fiber, Layer, Option, Result, Stream } from "effect";
+import { Array, Effect, Fiber, FileSystem, Layer, Option, Path, Result, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
 
 import {
@@ -191,14 +189,16 @@ const OPENAI_AUTH_PROVIDERS = new Set(["openai"]);
  * Returns `undefined` when the file does not exist or does not set
  * `model_provider`.
  */
-export function readCodexConfigModelProvider(): string | undefined {
-  const codexHome = process.env.CODEX_HOME || NodePath.join(OS.homedir(), ".codex");
-  const configPath = NodePath.join(codexHome, "config.toml");
+export const readCodexConfigModelProvider = Effect.gen(function* () {
+  const fileSystem = yield* FileSystem.FileSystem;
+  const path = yield* Path.Path;
+  const codexHome = process.env.CODEX_HOME || path.join(OS.homedir(), ".codex");
+  const configPath = path.join(codexHome, "config.toml");
 
-  let content: string;
-  try {
-    content = fs.readFileSync(configPath, "utf8");
-  } catch {
+  const content = yield* fileSystem
+    .readFileString(configPath)
+    .pipe(Effect.orElseSucceed(() => undefined));
+  if (content === undefined) {
     return undefined;
   }
 
@@ -221,7 +221,7 @@ export function readCodexConfigModelProvider(): string | undefined {
     if (match) return match[1];
   }
   return undefined;
-}
+});
 
 /**
  * Returns `true` when the Codex CLI is configured with a custom
@@ -229,10 +229,10 @@ export function readCodexConfigModelProvider(): string | undefined {
  * required because authentication is handled through provider-specific
  * environment variables.
  */
-export function hasCustomModelProvider(): boolean {
-  const provider = readCodexConfigModelProvider();
-  return provider !== undefined && !OPENAI_AUTH_PROVIDERS.has(provider);
-}
+export const hasCustomModelProvider = Effect.map(
+  readCodexConfigModelProvider,
+  (provider) => provider !== undefined && !OPENAI_AUTH_PROVIDERS.has(provider),
+);
 
 // ── Effect-native command execution ─────────────────────────────────
 
@@ -269,7 +269,7 @@ const runCodexCommand = (args: ReadonlyArray<string>) =>
 export const checkCodexProviderStatus: Effect.Effect<
   ServerProviderStatus,
   never,
-  ChildProcessSpawner.ChildProcessSpawner
+  ChildProcessSpawner.ChildProcessSpawner | FileSystem.FileSystem | Path.Path
 > = Effect.gen(function* () {
   const checkedAt = new Date().toISOString();
 
@@ -337,7 +337,7 @@ export const checkCodexProviderStatus: Effect.Effect<
   // authentication through their own environment variables, so `codex
   // login status` will report "not logged in" even when the CLI works
   // fine.  Skip the auth probe entirely for non-OpenAI providers.
-  if (hasCustomModelProvider()) {
+  if (yield* hasCustomModelProvider) {
     return {
       provider: CODEX_PROVIDER,
       status: "ready" as const,
