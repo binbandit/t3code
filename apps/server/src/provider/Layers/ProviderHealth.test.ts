@@ -179,30 +179,27 @@ describe("checkCodexProviderStatus", () => {
     ),
   );
 
-  it.effect(
-    "returns unauthenticated when login status output includes 'not logged in'",
-    () =>
-      Effect.gen(function* () {
-        const status = yield* checkCodexProviderStatus;
-        assert.strictEqual(status.provider, "codex");
-        assert.strictEqual(status.status, "error");
-        assert.strictEqual(status.available, true);
-        assert.strictEqual(status.authStatus, "unauthenticated");
-        assert.strictEqual(
-          status.message,
-          "Codex CLI is not authenticated. Run `codex login` and try again.",
-        );
-      }).pipe(
-        Effect.provide(
-          mockSpawnerLayer((args) => {
-            const joined = args.join(" ");
-            if (joined === "--version") return { stdout: "codex 1.0.0\n", stderr: "", code: 0 };
-            if (joined === "login status")
-              return { stdout: "Not logged in\n", stderr: "", code: 1 };
-            throw new Error(`Unexpected args: ${joined}`);
-          }),
-        ),
+  it.effect("returns unauthenticated when login status output includes 'not logged in'", () =>
+    Effect.gen(function* () {
+      const status = yield* checkCodexProviderStatus;
+      assert.strictEqual(status.provider, "codex");
+      assert.strictEqual(status.status, "error");
+      assert.strictEqual(status.available, true);
+      assert.strictEqual(status.authStatus, "unauthenticated");
+      assert.strictEqual(
+        status.message,
+        "Codex CLI is not authenticated. Run `codex login` and try again.",
+      );
+    }).pipe(
+      Effect.provide(
+        mockSpawnerLayer((args) => {
+          const joined = args.join(" ");
+          if (joined === "--version") return { stdout: "codex 1.0.0\n", stderr: "", code: 0 };
+          if (joined === "login status") return { stdout: "Not logged in\n", stderr: "", code: 1 };
+          throw new Error(`Unexpected args: ${joined}`);
+        }),
       ),
+    ),
   );
 
   it.effect("returns warning when login status command is unsupported", () =>
@@ -238,9 +235,13 @@ describe("checkCodexProviderStatus with custom model provider", () => {
 
   beforeEach(() => {
     ({ cleanup } = withTempCodexHome(
-      ['model_provider = "portkey"', "", "[model_providers.portkey]", 'base_url = "https://api.portkey.ai/v1"', 'env_key = "PORTKEY_API_KEY"'].join(
-        "\n",
-      ),
+      [
+        'model_provider = "portkey"',
+        "",
+        "[model_providers.portkey]",
+        'base_url = "https://api.portkey.ai/v1"',
+        'env_key = "PORTKEY_API_KEY"',
+      ].join("\n"),
     ));
   });
   afterEach(() => cleanup());
