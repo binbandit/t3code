@@ -1,6 +1,5 @@
-import assert from "node:assert/strict";
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { describe, it } from "@effect/vitest";
+import { describe, it, assert } from "@effect/vitest";
 import { Effect, FileSystem, Layer, Path, Sink, Stream } from "effect";
 import * as PlatformError from "effect/PlatformError";
 import { ChildProcessSpawner } from "effect/unstable/process";
