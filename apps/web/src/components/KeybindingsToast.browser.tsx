@@ -14,8 +14,13 @@ import {
 import { RouterProvider, createMemoryHistory } from "@tanstack/react-router";
 import { ws, http, HttpResponse } from "msw";
 import { setupWorker } from "msw/browser";
+import type { ReactNode } from "react";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "vitest-browser-react";
+
+vi.mock("../components/DiffWorkerPoolProvider", () => ({
+  DiffWorkerPoolProvider: ({ children }: { children?: ReactNode }) => children ?? null,
+}));
 
 import { useComposerDraftStore } from "../composerDraftStore";
 import { getRouter } from "../router";
@@ -396,6 +401,7 @@ describe("Keybindings update toast", () => {
 
   it("does not show a toast from the replayed cached value on subscribe", async () => {
     const mounted = await mountApp();
+    let remounted: Awaited<ReturnType<typeof mountApp>> | null = null;
 
     try {
       sendServerConfigUpdatedPush([]);
@@ -405,7 +411,7 @@ describe("Keybindings update toast", () => {
       // Remount the app — onServerConfigUpdated replays the cached value
       // synchronously on subscribe. This should NOT produce a toast.
       await mounted.cleanup();
-      const remounted = await mountApp();
+      remounted = await mountApp();
 
       // Give it a moment to process the replayed value
       await new Promise((resolve) => setTimeout(resolve, 500));
@@ -417,7 +423,9 @@ describe("Keybindings update toast", () => {
       ).toBe(0);
 
       await remounted.cleanup();
+      remounted = null;
     } catch (error) {
+      await remounted?.cleanup().catch(() => {});
       await mounted.cleanup().catch(() => {});
       throw error;
     }
