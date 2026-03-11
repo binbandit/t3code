@@ -83,7 +83,11 @@ import {
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
 import { isNonEmpty as isNonEmptyString } from "effect/String";
-import { resolveThreadStatusPill, shouldClearThreadSelectionOnMouseDown } from "./Sidebar.logic";
+import {
+  resolveSidebarNewThreadEnvMode,
+  resolveThreadStatusPill,
+  shouldClearThreadSelectionOnMouseDown,
+} from "./Sidebar.logic";
 
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 const THREAD_PREVIEW_LIMIT = 6;
@@ -310,6 +314,7 @@ export default function Sidebar() {
   const setSelectionAnchor = useThreadSelectionStore((s) => s.setAnchor);
   const shouldBrowseForProjectImmediately = isElectron;
   const shouldShowProjectPathEntry = addingProject && !shouldBrowseForProjectImmediately;
+  const defaultNewThreadEnvMode = appSettings.defaultThreadEnvMode;
   const pendingApprovalByThreadId = useMemo(() => {
     const map = new Map<ThreadId, boolean>();
     for (const thread of threads) {
@@ -527,7 +532,9 @@ export default function Sidebar() {
           defaultModel: DEFAULT_MODEL_BY_PROVIDER.codex,
           createdAt,
         });
-        await handleNewThread(projectId).catch(() => undefined);
+        await handleNewThread(projectId, {
+          envMode: defaultNewThreadEnvMode,
+        }).catch(() => undefined);
       } catch (error) {
         const description =
           error instanceof Error ? error.message : "An error occurred while adding the project.";
@@ -546,6 +553,7 @@ export default function Sidebar() {
       finishAddingProject();
     },
     [
+      defaultNewThreadEnvMode,
       focusMostRecentThreadForProject,
       handleNewThread,
       isAddingProject,
@@ -1054,7 +1062,9 @@ export default function Sidebar() {
           activeThread?.projectId ?? activeDraftThread?.projectId ?? projects[0]?.id;
         if (!projectId) return;
         event.preventDefault();
-        void handleNewThread(projectId);
+        void handleNewThread(projectId, {
+          envMode: "local",
+        });
         return;
       }
 
@@ -1486,7 +1496,11 @@ export default function Sidebar() {
                                     onClick={(event) => {
                                       event.preventDefault();
                                       event.stopPropagation();
-                                      void handleNewThread(project.id);
+                                      void handleNewThread(project.id, {
+                                        envMode: resolveSidebarNewThreadEnvMode({
+                                          defaultEnvMode: defaultNewThreadEnvMode,
+                                        }),
+                                      });
                                     }}
                                   >
                                     <SquarePenIcon className="size-3.5" />
