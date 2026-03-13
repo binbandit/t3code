@@ -1,5 +1,4 @@
 import type { ThreadId } from "@t3tools/contracts";
-import { FolderIcon, GitBranchPlusIcon } from "lucide-react";
 import { useCallback } from "react";
 
 import { newCommandId } from "../lib/utils";
@@ -21,15 +20,6 @@ interface BranchToolbarProps {
   onCheckoutPullRequestRequest?: (reference: string) => void;
   onComposerFocusRequest?: () => void;
 }
-
-const ENV_MODE_TOGGLE_GROUP_CLASS_NAME =
-  "rounded-2xl border border-border/70 bg-background/80 p-1 shadow-xs/5 backdrop-blur-sm dark:bg-card/75";
-
-const ENV_MODE_TOGGLE_CLASS_NAME =
-  "gap-2 rounded-xl border border-transparent px-3 text-xs font-medium text-muted-foreground/75 shadow-none transition-all duration-150 hover:bg-background/70 hover:text-foreground/85 data-[pressed]:border-border/80 data-[pressed]:bg-primary/10 data-[pressed]:text-foreground data-[pressed]:ring-1 data-[pressed]:ring-primary/10 data-[pressed]:shadow-sm data-disabled:opacity-100 data-disabled:text-muted-foreground/60 [&_[data-slot=icon-chip]]:bg-background/70 [&_[data-slot=icon-chip]]:ring-1 [&_[data-slot=icon-chip]]:ring-border/40 data-[pressed]:[&_[data-slot=icon-chip]]:bg-primary/12 data-[pressed]:[&_[data-slot=icon-chip]]:ring-primary/20 [&_svg]:size-3.5 [&_svg]:text-muted-foreground/55 [&_svg]:transition-colors data-[pressed]:[&_svg]:text-primary data-disabled:[&_svg]:text-muted-foreground/35";
-
-const ENV_MODE_ICON_CHIP_CLASS_NAME =
-  "flex size-4 shrink-0 items-center justify-center rounded-full transition-colors";
 
 export default function BranchToolbar({
   threadId,
@@ -120,8 +110,9 @@ export default function BranchToolbar({
       <div className="flex shrink-0 items-center gap-2">
         <ToggleGroup
           aria-label="Thread workspace mode"
-          className={ENV_MODE_TOGGLE_GROUP_CLASS_NAME}
+          className="shrink-0"
           size="xs"
+          variant="outline"
           multiple={false}
           value={[envToggleValue]}
           onValueChange={(value) => {
@@ -133,33 +124,19 @@ export default function BranchToolbar({
           }}
         >
           <Toggle
-            className={ENV_MODE_TOGGLE_CLASS_NAME}
+            className="px-3"
             disabled={envToggleDisabled}
             title="Use the local repository"
             value="local"
           >
-            <span
-              aria-hidden="true"
-              data-slot="icon-chip"
-              className={ENV_MODE_ICON_CHIP_CLASS_NAME}
-            >
-              <FolderIcon aria-hidden="true" />
-            </span>
             Local
           </Toggle>
           <Toggle
-            className={ENV_MODE_TOGGLE_CLASS_NAME}
+            className="px-3"
             disabled={envToggleDisabled}
             title="Use a separate worktree"
             value="worktree"
           >
-            <span
-              aria-hidden="true"
-              data-slot="icon-chip"
-              className={ENV_MODE_ICON_CHIP_CLASS_NAME}
-            >
-              <GitBranchPlusIcon aria-hidden="true" />
-            </span>
             {worktreeToggleLabel}
           </Toggle>
         </ToggleGroup>

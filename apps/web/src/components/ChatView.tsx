@@ -149,6 +149,7 @@ import {
   buildTemporaryWorktreeBranchName,
   cloneComposerImageForRetry,
   collectUserMessageBlobPreviewUrls,
+  extendReplacementRangeForTrailingSpace,
   getCustomModelOptionsByProvider,
   LAST_INVOKED_SCRIPT_BY_PROJECT_KEY,
   LastInvokedScriptByProjectSchema,
@@ -2967,17 +2968,6 @@ export default function ChatView({ threadId }: ChatViewProps) {
       expandedCursor: expandCollapsedComposerCursor(promptRef.current, composerCursor),
     };
   }, [composerCursor]);
-
-  const extendReplacementRangeForTrailingSpace = (
-    text: string,
-    rangeEnd: number,
-    replacement: string,
-  ): number => {
-    if (!replacement.endsWith(" ")) {
-      return rangeEnd;
-    }
-    return text[rangeEnd] === " " ? rangeEnd + 1 : rangeEnd;
-  };
 
   const resolveActiveComposerTrigger = useCallback((): {
     snapshot: { value: string; cursor: number; expandedCursor: number };
