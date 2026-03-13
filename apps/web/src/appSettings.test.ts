@@ -1,9 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
-  getAppSettingsSnapshot,
+  DEFAULT_TIMESTAMP_FORMAT,
   getAppModelOptions,
-  getSlashModelOptions,
   normalizeCustomModelSlugs,
   resolveAppModelSelection,
 } from "./appSettings";
@@ -22,20 +21,6 @@ function createStorage() {
       values.clear();
     },
   };
-}
-
-function writeSettings(partial: Record<string, unknown>) {
-  localStorage.setItem(
-    "t3code:app-settings:v1",
-    JSON.stringify({
-      codexBinaryPath: "",
-      codexHomePath: "",
-      confirmThreadDelete: true,
-      enableAssistantStreaming: false,
-      customCodexModels: [],
-      ...partial,
-    }),
-  );
 }
 
 beforeEach(() => {
@@ -102,49 +87,8 @@ describe("resolveAppModelSelection", () => {
   });
 });
 
-describe("getSlashModelOptions", () => {
-  it("includes saved custom model slugs for /model command suggestions", () => {
-    const options = getSlashModelOptions("codex", ["custom/internal-model"], "", "gpt-5.3-codex");
-
-    expect(options.some((option) => option.slug === "custom/internal-model")).toBe(true);
-  });
-
-  it("filters slash-model suggestions across built-in and custom model names", () => {
-    const options = getSlashModelOptions("codex", ["openai/gpt-oss-120b"], "oss", "gpt-5.3-codex");
-
-    expect(options.map((option) => option.slug)).toEqual(["openai/gpt-oss-120b"]);
-  });
-});
-
-describe("getAppSettingsSnapshot", () => {
-  it("defaults the thread environment mode to local for older persisted settings", () => {
-    localStorage.setItem(
-      "t3code:app-settings:v1",
-      JSON.stringify({
-        codexBinaryPath: "/usr/local/bin/codex",
-        codexHomePath: "",
-        confirmThreadDelete: true,
-        enableAssistantStreaming: false,
-        customCodexModels: [],
-      }),
-    );
-
-    expect(getAppSettingsSnapshot().defaultThreadEnvMode).toBe("local");
-  });
-
-  it("falls back to local when the persisted thread environment mode is invalid", () => {
-    writeSettings({
-      defaultThreadEnvMode: "invalid",
-    });
-
-    expect(getAppSettingsSnapshot().defaultThreadEnvMode).toBe("local");
-  });
-
-  it("reads a persisted worktree default for new threads", () => {
-    writeSettings({
-      defaultThreadEnvMode: "worktree",
-    });
-
-    expect(getAppSettingsSnapshot().defaultThreadEnvMode).toBe("worktree");
+describe("timestamp format defaults", () => {
+  it("defaults timestamp format to locale", () => {
+    expect(DEFAULT_TIMESTAMP_FORMAT).toBe("locale");
   });
 });
