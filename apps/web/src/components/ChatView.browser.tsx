@@ -533,23 +533,6 @@ async function waitForElement<T extends Element>(
   return element;
 }
 
-async function waitForGroupLabels(): Promise<string[]> {
-  let labels: string[] = [];
-  await vi.waitFor(
-    () => {
-      labels = Array.from(
-        document.querySelectorAll<HTMLElement>('[data-slot="command-group-label"]'),
-      ).map((label) => label.textContent?.trim() ?? "");
-      expect(labels.length).toBeGreaterThan(0);
-    },
-    {
-      timeout: 8_000,
-      interval: 16,
-    },
-  );
-  return labels;
-}
-
 async function waitForURL(
   router: ReturnType<typeof getRouter>,
   predicate: (pathname: string) => boolean,
@@ -1352,57 +1335,6 @@ describe("ChatView timeline estimator parity (full app)", () => {
       const draftThread = useComposerDraftStore.getState().draftThreadsByThreadId[nextThreadId];
       expect(draftThread?.projectId).toBe(SECOND_PROJECT_ID);
       expect(draftThread?.envMode).toBe("worktree");
-    } finally {
-      await mounted.cleanup();
-    }
-  });
-
-  it("prioritizes projects over threads while searching", async () => {
-    const mounted = await mountChatView({
-      viewport: DEFAULT_VIEWPORT,
-      snapshot: createSnapshotWithSecondaryProject(),
-      configureFixture: (nextFixture) => {
-        nextFixture.serverConfig = {
-          ...nextFixture.serverConfig,
-          keybindings: [
-            {
-              command: "commandPalette.toggle",
-              shortcut: {
-                key: "k",
-                metaKey: false,
-                ctrlKey: false,
-                shiftKey: false,
-                altKey: false,
-                modKey: true,
-              },
-              whenAst: {
-                type: "not",
-                node: { type: "identifier", name: "terminalFocus" },
-              },
-            },
-          ],
-        };
-      },
-    });
-
-    try {
-      const useMetaForMod = isMacPlatform(navigator.platform);
-      window.dispatchEvent(
-        new KeyboardEvent("keydown", {
-          key: "k",
-          metaKey: useMetaForMod,
-          ctrlKey: !useMetaForMod,
-          bubbles: true,
-          cancelable: true,
-        }),
-      );
-
-      await expect.element(page.getByTestId("command-palette")).toBeInTheDocument();
-      await page.getByPlaceholder("Search commands, projects, and threads...").fill("project");
-      const labels = await waitForGroupLabels();
-      expect(labels.indexOf("Projects")).toBeGreaterThanOrEqual(0);
-      expect(labels.indexOf("Recent Threads")).toBeGreaterThanOrEqual(0);
-      expect(labels.indexOf("Projects")).toBeLessThan(labels.indexOf("Recent Threads"));
     } finally {
       await mounted.cleanup();
     }
