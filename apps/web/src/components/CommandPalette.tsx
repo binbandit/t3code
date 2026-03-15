@@ -68,10 +68,6 @@ interface CommandPaletteGroup {
 }
 
 const CommandPaletteContext = createContext<CommandPaletteState | null>(null);
-const COMMAND_PALETTE_GROUP_ORDER = ["actions", "projects", "recent-threads"] as const;
-const COMMAND_PALETTE_GROUP_PRIORITY = new Map(
-  COMMAND_PALETTE_GROUP_ORDER.map((value, index) => [value, index] as const),
-);
 
 function iconClassName() {
   return "size-4 text-muted-foreground/80";
@@ -90,20 +86,6 @@ function compareThreadsByCreatedAtDesc(
 
 function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
-}
-
-function compareCommandPaletteGroups(
-  left: CommandPaletteGroup,
-  right: CommandPaletteGroup,
-): number {
-  return (
-    (COMMAND_PALETTE_GROUP_PRIORITY.get(
-      left.value as (typeof COMMAND_PALETTE_GROUP_ORDER)[number],
-    ) ?? COMMAND_PALETTE_GROUP_ORDER.length) -
-    (COMMAND_PALETTE_GROUP_PRIORITY.get(
-      right.value as (typeof COMMAND_PALETTE_GROUP_ORDER)[number],
-    ) ?? COMMAND_PALETTE_GROUP_ORDER.length)
-  );
 }
 
 export function useCommandPalette() {
@@ -284,7 +266,7 @@ function OpenCommandPaletteDialog() {
         items: recentThreadItems,
       });
     }
-    return nextGroups.toSorted(compareCommandPaletteGroups);
+    return nextGroups;
   }, [
     activeDraftThread,
     activeThread,
@@ -312,8 +294,7 @@ function OpenCommandPaletteDialog() {
           return haystack.includes(normalizedQuery);
         }),
       }))
-      .filter((group) => group.items.length > 0)
-      .toSorted(compareCommandPaletteGroups);
+      .filter((group) => group.items.length > 0);
   }, [allGroups, deferredQuery]);
 
   const executeItem = useCallback(
