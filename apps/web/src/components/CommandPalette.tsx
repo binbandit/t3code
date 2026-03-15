@@ -3,7 +3,7 @@
 import { type KeybindingCommand } from "@t3tools/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { MessageSquareIcon, SettingsIcon, SquarePenIcon } from "lucide-react";
+import { FolderIcon, MessageSquareIcon, SettingsIcon, SquarePenIcon } from "lucide-react";
 import {
   createContext,
   useCallback,
@@ -22,6 +22,7 @@ import {
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { cn } from "../lib/utils";
 import { shortcutLabelForCommand } from "../keybindings";
+import { formatRelativeTime } from "../relativeTime";
 import { useStore } from "../store";
 import { Kbd, KbdGroup } from "./ui/kbd";
 import {
@@ -54,6 +55,7 @@ interface CommandPaletteItem {
   readonly label: string;
   readonly title: string;
   readonly description?: string;
+  readonly timestamp?: string;
   readonly icon: ReactNode;
   readonly shortcutCommand?: KeybindingCommand;
   readonly run: () => Promise<void>;
@@ -69,6 +71,50 @@ const CommandPaletteContext = createContext<CommandPaletteState | null>(null);
 
 function iconClassName() {
   return "size-4 text-muted-foreground/80";
+}
+
+function resolveThreadLastActivityAt(thread: {
+  createdAt: string;
+  latestTurn: {
+    completedAt: string | null;
+    startedAt: string | null;
+    requestedAt: string;
+  } | null;
+}): string {
+  return (
+    thread.latestTurn?.completedAt ??
+    thread.latestTurn?.startedAt ??
+    thread.latestTurn?.requestedAt ??
+    thread.createdAt
+  );
+}
+
+function compareThreadsByLastActivityDesc(
+  left: {
+    id: string;
+    createdAt: string;
+    latestTurn: {
+      completedAt: string | null;
+      startedAt: string | null;
+      requestedAt: string;
+    } | null;
+  },
+  right: {
+    id: string;
+    createdAt: string;
+    latestTurn: {
+      completedAt: string | null;
+      startedAt: string | null;
+      requestedAt: string;
+    } | null;
+  },
+): number {
+  const byTimestamp =
+    Date.parse(resolveThreadLastActivityAt(right)) - Date.parse(resolveThreadLastActivityAt(left));
+  if (!Number.isNaN(byTimestamp) && byTimestamp !== 0) {
+    return byTimestamp;
+  }
+  return right.id.localeCompare(left.id);
 }
 
 function normalizeSearchText(value: string): string {
@@ -191,26 +237,21 @@ function OpenCommandPaletteDialog() {
       },
     });
 
+    const projectItems = projects.map<CommandPaletteItem>((project) => ({
+      value: `project:${project.id}`,
+      label: `${project.name} ${project.cwd}`.trim(),
+      title: project.name,
+      description: project.cwd,
+      icon: <FolderIcon className={iconClassName()} />,
+      run: async () => {
+        await handleNewThread(project.id, {
+          envMode: settings.defaultThreadEnvMode,
+        });
+      },
+    }));
+
     const recentThreadItems = threads
-      .toSorted((left, right) => {
-        const rightTimestamp = Date.parse(
-          right.latestTurn?.completedAt ??
-            right.latestTurn?.startedAt ??
-            right.latestTurn?.requestedAt ??
-            right.createdAt,
-        );
-        const leftTimestamp = Date.parse(
-          left.latestTurn?.completedAt ??
-            left.latestTurn?.startedAt ??
-            left.latestTurn?.requestedAt ??
-            left.createdAt,
-        );
-        const byTimestamp = rightTimestamp - leftTimestamp;
-        if (byTimestamp !== 0) {
-          return byTimestamp;
-        }
-        return right.id.localeCompare(left.id);
-      })
+      .toSorted(compareThreadsByLastActivityDesc)
       .slice(0, RECENT_THREAD_LIMIT)
       .map<CommandPaletteItem>((thread) => {
         const projectTitle = projectTitleById.get(thread.projectId);
@@ -225,6 +266,7 @@ function OpenCommandPaletteDialog() {
           label: `${thread.title} ${projectTitle ?? ""} ${thread.branch ?? ""}`.trim(),
           title: thread.title,
           description: descriptionParts.join(" · "),
+          timestamp: formatRelativeTime(resolveThreadLastActivityAt(thread)),
           icon: <MessageSquareIcon className={iconClassName()} />,
           run: async () => {
             await navigate({
@@ -248,6 +290,13 @@ function OpenCommandPaletteDialog() {
         value: "recent-threads",
         label: "Recent Threads",
         items: recentThreadItems,
+      });
+    }
+    if (projectItems.length > 0) {
+      nextGroups.push({
+        value: "projects",
+        label: "Projects",
+        items: projectItems,
       });
     }
     return nextGroups;
@@ -302,7 +351,7 @@ function OpenCommandPaletteDialog() {
       data-testid="command-palette"
     >
       <Command aria-label="Command palette" mode="none" onValueChange={setQuery} value={query}>
-        <CommandInput placeholder="Search commands and threads..." />
+        <CommandInput placeholder="Search commands, projects, and threads..." />
         <CommandPanel className="max-h-[min(28rem,70vh)]">
           <CommandList>
             {filteredGroups.map((group) => (
@@ -335,6 +384,11 @@ function OpenCommandPaletteDialog() {
                             </span>
                           ) : null}
                         </span>
+                        {item.timestamp ? (
+                          <span className="min-w-12 shrink-0 text-right text-[10px] tabular-nums text-muted-foreground/70">
+                            {item.timestamp}
+                          </span>
+                        ) : null}
                         {shortcutLabel ? <CommandShortcut>{shortcutLabel}</CommandShortcut> : null}
                       </CommandItem>
                     );
@@ -343,10 +397,14 @@ function OpenCommandPaletteDialog() {
               </CommandGroup>
             ))}
           </CommandList>
-          <CommandEmpty className="py-10 text-sm">No matching commands or threads.</CommandEmpty>
+          <CommandEmpty className="py-10 text-sm">
+            No matching commands, projects, or threads.
+          </CommandEmpty>
         </CommandPanel>
         <CommandFooter className="gap-3 max-sm:flex-col max-sm:items-start">
-          <span>Search actions and jump back into recent threads.</span>
+          <span>
+            Search actions, start a thread in any project, or jump back into recent threads.
+          </span>
           <div className="flex items-center gap-3">
             <KbdGroup className="items-center gap-1.5">
               <Kbd>Enter</Kbd>
