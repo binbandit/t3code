@@ -121,6 +121,19 @@ function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+function groupPriorityForQuery(group: CommandPaletteGroup): number {
+  switch (group.value) {
+    case "actions":
+      return 0;
+    case "projects":
+      return 1;
+    case "recent-threads":
+      return 2;
+    default:
+      return 3;
+  }
+}
+
 export function useCommandPalette() {
   const context = useContext(CommandPaletteContext);
   if (!context) {
@@ -285,18 +298,18 @@ function OpenCommandPaletteDialog() {
         items: actionItems,
       });
     }
-    if (recentThreadItems.length > 0) {
-      nextGroups.push({
-        value: "recent-threads",
-        label: "Recent Threads",
-        items: recentThreadItems,
-      });
-    }
     if (projectItems.length > 0) {
       nextGroups.push({
         value: "projects",
         label: "Projects",
         items: projectItems,
+      });
+    }
+    if (recentThreadItems.length > 0) {
+      nextGroups.push({
+        value: "recent-threads",
+        label: "Recent Threads",
+        items: recentThreadItems,
       });
     }
     return nextGroups;
@@ -327,7 +340,8 @@ function OpenCommandPaletteDialog() {
           return haystack.includes(normalizedQuery);
         }),
       }))
-      .filter((group) => group.items.length > 0);
+      .filter((group) => group.items.length > 0)
+      .toSorted((left, right) => groupPriorityForQuery(left) - groupPriorityForQuery(right));
   }, [allGroups, deferredQuery]);
 
   const executeItem = useCallback(
