@@ -19,6 +19,8 @@ import type {
   GitStatusResult,
 } from "./git";
 import type {
+  FilesystemBrowseInput,
+  FilesystemBrowseResult,
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
   ProjectWriteFileInput,
@@ -128,10 +130,7 @@ export interface NativeApi {
   projects: {
     searchEntries: (input: ProjectSearchEntriesInput) => Promise<ProjectSearchEntriesResult>;
     writeFile: (input: ProjectWriteFileInput) => Promise<ProjectWriteFileResult>;
-    browseFilesystem: (input: { partialPath: string }) => Promise<{
-      parentPath: string;
-      entries: Array<{ name: string; fullPath: string }>;
-    }>;
+    browseFilesystem: (input: FilesystemBrowseInput) => Promise<FilesystemBrowseResult>;
   };
   shell: {
     openInEditor: (cwd: string, editor: EditorId) => Promise<void>;

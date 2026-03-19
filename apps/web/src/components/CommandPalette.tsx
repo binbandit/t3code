@@ -23,6 +23,14 @@ import {
   startNewLocalThreadFromContext,
   startNewThreadFromContext,
 } from "../lib/chatThreadActions";
+import {
+  appendBrowsePathSegment,
+  findProjectByPath,
+  getBrowseParentPath,
+  inferProjectTitleFromPath,
+  isFilesystemBrowseQuery,
+  normalizeProjectPathForDispatch,
+} from "../lib/projectPaths";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { cn, newCommandId, newProjectId } from "../lib/utils";
 import { shortcutLabelForCommand } from "../keybindings";
@@ -132,12 +140,7 @@ function OpenCommandPaletteDialog() {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const isActionsOnly = query.startsWith(">");
-  const isBrowsing =
-    query.startsWith("/") ||
-    query.startsWith("~/") ||
-    query.startsWith("./") ||
-    query.startsWith("../") ||
-    /^[a-zA-Z]:[/\\]/.test(query);
+  const isBrowsing = isFilesystemBrowseQuery(query);
   const [debouncedBrowsePath] = useDebouncedValue(query, { wait: 200 });
   const { settings } = useAppSettings();
   const { activeDraftThread, activeThread, handleNewThread, projects } = useHandleNewThread();
@@ -267,10 +270,10 @@ function OpenCommandPaletteDialog() {
         actionItems.push({
           kind: "action",
           value: "action:new-local-thread",
-          label: `new local thread chat create ${activeProjectTitle}`.trim(),
+          label: `new fresh thread chat create ${activeProjectTitle}`.trim(),
           title: (
             <>
-              New local thread in <span className="font-semibold">{activeProjectTitle}</span>
+              New fresh thread in <span className="font-semibold">{activeProjectTitle}</span>
             </>
           ),
           searchText: "new local thread chat create fresh default environment",
@@ -481,17 +484,31 @@ function OpenCommandPaletteDialog() {
   }, [activeGroups, allThreadItems, currentView, deferredQuery, projectThreadItems]);
 
   const handleAddProject = useCallback(
-    async (cwd: string) => {
+    async (rawCwd: string) => {
       const api = readNativeApi();
       if (!api) return;
-      const existing = projects.find((p) => p.cwd === cwd);
+      const cwd = normalizeProjectPathForDispatch(rawCwd);
+      if (cwd.length === 0) {
+        return;
+      }
+
+      const existing = findProjectByPath(projects, cwd);
       if (existing) {
+        const latestThread = threads
+          .filter((thread) => thread.projectId === existing.id)
+          .toSorted(compareThreadsByCreatedAtDesc)[0];
+        if (latestThread) {
+          await navigate({
+            to: "/$threadId",
+            params: { threadId: latestThread.id },
+          });
+        }
         setOpen(false);
         return;
       }
+
       const projectId = newProjectId();
-      const segments = cwd.split(/[/\\]/);
-      const title = segments.findLast(Boolean) ?? cwd;
+      const title = inferProjectTitleFromPath(cwd);
       await api.orchestration.dispatchCommand({
         type: "project.create",
         commandId: newCommandId(),
@@ -504,14 +521,13 @@ function OpenCommandPaletteDialog() {
       await handleNewThread(projectId, { envMode: settings.defaultThreadEnvMode }).catch(() => {});
       setOpen(false);
     },
-    [handleNewThread, projects, setOpen, settings.defaultThreadEnvMode],
+    [handleNewThread, navigate, projects, setOpen, settings.defaultThreadEnvMode, threads],
   );
 
   // Navigate into a subdirectory in browse mode
   const browseTo = useCallback(
     (name: string) => {
-      const queryDir = query.replace(/[^/]*$/, ""); // e.g. "~/" or "~/projects/"
-      setQuery(queryDir + name + "/");
+      setQuery(appendBrowsePathSegment(query, name));
       setBrowseGeneration((g) => g + 1);
     },
     [query],
@@ -519,16 +535,14 @@ function OpenCommandPaletteDialog() {
 
   // Navigate up one directory level in browse mode
   const browseUp = useCallback(() => {
-    const trimmed = query.replace(/\/$/, "");
-    const lastSlash = trimmed.lastIndexOf("/");
-    if (lastSlash >= 0) {
-      setQuery(trimmed.slice(0, lastSlash + 1));
+    const parentPath = getBrowseParentPath(query);
+    if (parentPath !== null) {
+      setQuery(parentPath);
       setBrowseGeneration((g) => g + 1);
     }
   }, [query]);
 
-  // Whether to show a ".." entry (can go up if path has more than one segment)
-  const canBrowseUp = isBrowsing && /\/.+\//.test(query);
+  const canBrowseUp = isBrowsing && getBrowseParentPath(query) !== null;
 
   // Browse mode items rendered through the autocomplete primitive
   const browseGroups = useMemo<CommandPaletteGroup[]>(() => {
@@ -633,10 +647,20 @@ function OpenCommandPaletteDialog() {
         <div className="relative">
           <CommandInput
             className={isBrowsing ? "pe-16" : undefined}
-            placeholder={currentView !== null
-              ? (isBrowsing ? "Enter path (e.g. ~/projects/my-app)" : "Search...")
-              : inputPlaceholder}
-            startAddon={currentView !== null ? currentView.addonIcon : (isBrowsing ? <FolderPlusIcon /> : undefined)}
+            placeholder={
+              currentView !== null
+                ? isBrowsing
+                  ? "Enter path (e.g. ~/projects/my-app)"
+                  : "Search..."
+                : inputPlaceholder
+            }
+            startAddon={
+              currentView !== null ? (
+                currentView.addonIcon
+              ) : isBrowsing ? (
+                <FolderPlusIcon />
+              ) : undefined
+            }
             onKeyDown={handleKeyDown}
           />
           {isBrowsing ? (

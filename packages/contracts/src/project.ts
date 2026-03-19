@@ -26,6 +26,23 @@ export const ProjectSearchEntriesResult = Schema.Struct({
 });
 export type ProjectSearchEntriesResult = typeof ProjectSearchEntriesResult.Type;
 
+export const FilesystemBrowseInput = Schema.Struct({
+  partialPath: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_WRITE_FILE_PATH_MAX_LENGTH)),
+});
+export type FilesystemBrowseInput = typeof FilesystemBrowseInput.Type;
+
+export const FilesystemBrowseEntry = Schema.Struct({
+  name: TrimmedNonEmptyString,
+  fullPath: TrimmedNonEmptyString,
+});
+export type FilesystemBrowseEntry = typeof FilesystemBrowseEntry.Type;
+
+export const FilesystemBrowseResult = Schema.Struct({
+  parentPath: TrimmedNonEmptyString,
+  entries: Schema.Array(FilesystemBrowseEntry),
+});
+export type FilesystemBrowseResult = typeof FilesystemBrowseResult.Type;
+
 export const ProjectWriteFileInput = Schema.Struct({
   cwd: TrimmedNonEmptyString,
   relativePath: TrimmedNonEmptyString.check(Schema.isMaxLength(PROJECT_WRITE_FILE_PATH_MAX_LENGTH)),

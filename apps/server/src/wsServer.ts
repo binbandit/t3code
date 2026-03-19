@@ -869,7 +869,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
       case WS_METHODS.filesystemBrowse: {
         const body = stripRequestTag(request.body);
         const expanded = path.resolve(yield* expandHomePath(body.partialPath));
-        const endsWithSep = body.partialPath.endsWith("/") || body.partialPath === "~";
+        const endsWithSep = /[\\/]$/.test(body.partialPath) || body.partialPath === "~";
         const parentDir = endsWithSep ? expanded : path.dirname(expanded);
         const prefix = endsWithSep ? "" : path.basename(expanded);
 
@@ -880,8 +880,11 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const showHidden = prefix.startsWith(".");
         const lowerPrefix = prefix.toLowerCase();
         const filtered = names
-          .filter((n) => n.toLowerCase().startsWith(lowerPrefix) && (showHidden || !n.startsWith(".")))
-          .slice(0, 100);
+          .filter(
+            (name) =>
+              name.toLowerCase().startsWith(lowerPrefix) && (showHidden || !name.startsWith(".")),
+          )
+          .toSorted((left, right) => left.localeCompare(right));
 
         const entries = yield* Effect.forEach(
           filtered,

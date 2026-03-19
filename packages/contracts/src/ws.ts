@@ -34,7 +34,7 @@ import {
   TerminalWriteInput,
 } from "./terminal";
 import { KeybindingRule } from "./keybindings";
-import { ProjectSearchEntriesInput, ProjectWriteFileInput } from "./project";
+import { FilesystemBrowseInput, ProjectSearchEntriesInput, ProjectWriteFileInput } from "./project";
 import { OpenInEditorInput } from "./editor";
 import { ServerConfigUpdatedPayload } from "./server";
 
@@ -140,12 +140,7 @@ const WebSocketRequestBody = Schema.Union([
   tagRequestBody(WS_METHODS.terminalClose, TerminalCloseInput),
 
   // Filesystem
-  tagRequestBody(
-    WS_METHODS.filesystemBrowse,
-    Schema.Struct({
-      partialPath: Schema.String,
-    }),
-  ),
+  tagRequestBody(WS_METHODS.filesystemBrowse, FilesystemBrowseInput),
 
   // Server meta
   tagRequestBody(WS_METHODS.serverGetConfig, Schema.Struct({})),

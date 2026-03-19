@@ -50,6 +50,11 @@ import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import {
+  findProjectByPath,
+  inferProjectTitleFromPath,
+  normalizeProjectPathForDispatch,
+} from "../lib/projectPaths";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
 import { toastManager } from "./ui/toast";
 import { Kbd } from "./ui/kbd";
@@ -85,7 +90,6 @@ import {
 } from "./ui/sidebar";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { formatWorktreePathForDisplay, getOrphanedWorktreePathForThread } from "../worktreeCleanup";
-import { isNonEmpty as isNonEmptyString } from "effect/String";
 import {
   resolveSidebarNewThreadEnvMode,
   resolveThreadRowClassName,
@@ -397,7 +401,7 @@ export default function Sidebar() {
 
   const addProjectFromPath = useCallback(
     async (rawCwd: string) => {
-      const cwd = rawCwd.trim();
+      const cwd = normalizeProjectPathForDispatch(rawCwd);
       if (!cwd || isAddingProject) return;
       const api = readNativeApi();
       if (!api) return;
@@ -410,7 +414,7 @@ export default function Sidebar() {
         setAddingProject(false);
       };
 
-      const existing = projects.find((project) => project.cwd === cwd);
+      const existing = findProjectByPath(projects, cwd);
       if (existing) {
         focusMostRecentThreadForProject(existing.id);
         finishAddingProject();
@@ -419,7 +423,7 @@ export default function Sidebar() {
 
       const projectId = newProjectId();
       const createdAt = new Date().toISOString();
-      const title = cwd.split(/[/\\]/).findLast(isNonEmptyString) ?? cwd;
+      const title = inferProjectTitleFromPath(cwd);
       try {
         await api.orchestration.dispatchCommand({
           type: "project.create",

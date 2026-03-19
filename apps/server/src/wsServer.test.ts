@@ -1573,6 +1573,39 @@ describe("WebSocket Server", () => {
     });
   });
 
+  it("supports filesystem.browse with directory-only results", async () => {
+    const workspace = makeTempDir("t3code-ws-filesystem-browse-");
+    fs.mkdirSync(path.join(workspace, "components"), { recursive: true });
+    fs.mkdirSync(path.join(workspace, "composables"), { recursive: true });
+    fs.writeFileSync(path.join(workspace, "composer.ts"), "export {};\n", "utf8");
+
+    server = await createTestServer({ cwd: "/test" });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.filesystemBrowse, {
+      partialPath: path.join(workspace, "comp"),
+    });
+
+    expect(response.error).toBeUndefined();
+    expect(response.result).toEqual({
+      parentPath: workspace,
+      entries: [
+        {
+          name: "components",
+          fullPath: path.join(workspace, "components"),
+        },
+        {
+          name: "composables",
+          fullPath: path.join(workspace, "composables"),
+        },
+      ],
+    });
+  });
+
   it("supports projects.writeFile within the workspace root", async () => {
     const workspace = makeTempDir("t3code-ws-write-file-");
 
