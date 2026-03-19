@@ -19,13 +19,12 @@ import type {
   GitStatusResult,
 } from "./git";
 import type {
-  FilesystemBrowseInput,
-  FilesystemBrowseResult,
   ProjectSearchEntriesInput,
   ProjectSearchEntriesResult,
   ProjectWriteFileInput,
   ProjectWriteFileResult,
 } from "./project";
+import type { FilesystemBrowseInput, FilesystemBrowseResult } from "./filesystem";
 import type { ServerConfig } from "./server";
 import type {
   TerminalClearInput,
@@ -130,7 +129,9 @@ export interface NativeApi {
   projects: {
     searchEntries: (input: ProjectSearchEntriesInput) => Promise<ProjectSearchEntriesResult>;
     writeFile: (input: ProjectWriteFileInput) => Promise<ProjectWriteFileResult>;
-    browseFilesystem: (input: FilesystemBrowseInput) => Promise<FilesystemBrowseResult>;
+  };
+  filesystem: {
+    browse: (input: FilesystemBrowseInput) => Promise<FilesystemBrowseResult>;
   };
   shell: {
     openInEditor: (cwd: string, editor: EditorId) => Promise<void>;

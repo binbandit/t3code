@@ -80,12 +80,14 @@ it.effect("accepts filesystem browse requests and trims the partial path", () =>
       body: {
         _tag: WS_METHODS.filesystemBrowse,
         partialPath: " ~/projects ",
+        cwd: " /repo/app ",
       },
     });
 
     assert.strictEqual(parsed.body._tag, WS_METHODS.filesystemBrowse);
     if (parsed.body._tag === WS_METHODS.filesystemBrowse) {
       assert.strictEqual(parsed.body.partialPath, "~/projects");
+      assert.strictEqual(parsed.body.cwd, "/repo/app");
     }
   }),
 );

@@ -1606,6 +1606,53 @@ describe("WebSocket Server", () => {
     });
   });
 
+  it("resolves relative filesystem.browse paths against the provided cwd", async () => {
+    const workspace = makeTempDir("t3code-ws-filesystem-browse-relative-");
+    fs.mkdirSync(path.join(workspace, "apps"), { recursive: true });
+    fs.mkdirSync(path.join(workspace, "docs"), { recursive: true });
+
+    server = await createTestServer({ cwd: "/test" });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.filesystemBrowse, {
+      partialPath: "../d",
+      cwd: path.join(workspace, "apps"),
+    });
+
+    expect(response.error).toBeUndefined();
+    expect(response.result).toEqual({
+      parentPath: workspace,
+      entries: [
+        {
+          name: "docs",
+          fullPath: path.join(workspace, "docs"),
+        },
+      ],
+    });
+  });
+
+  it("rejects relative filesystem.browse paths without a cwd", async () => {
+    server = await createTestServer({ cwd: "/test" });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.filesystemBrowse, {
+      partialPath: "./docs",
+    });
+
+    expect(response.result).toBeUndefined();
+    expect(response.error?.message).toContain(
+      "Relative filesystem browse paths require a current project.",
+    );
+  });
+
   it("supports projects.writeFile within the workspace root", async () => {
     const workspace = makeTempDir("t3code-ws-write-file-");
 

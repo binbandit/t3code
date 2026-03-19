@@ -1,6 +1,6 @@
 "use client";
 
-import { DEFAULT_MODEL_BY_PROVIDER, type KeybindingCommand } from "@t3tools/contracts";
+import { type KeybindingCommand } from "@t3tools/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useDebouncedValue } from "@tanstack/react-pacer";
@@ -25,14 +25,12 @@ import {
 } from "../lib/chatThreadActions";
 import {
   appendBrowsePathSegment,
-  findProjectByPath,
   getBrowseParentPath,
-  inferProjectTitleFromPath,
   isFilesystemBrowseQuery,
-  normalizeProjectPathForDispatch,
 } from "../lib/projectPaths";
+import { addProjectFromPath } from "../lib/projectAdd";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
-import { cn, newCommandId, newProjectId } from "../lib/utils";
+import { cn } from "../lib/utils";
 import { shortcutLabelForCommand } from "../keybindings";
 import { readNativeApi } from "../nativeApi";
 import { formatRelativeTime } from "../relativeTime";
@@ -148,17 +146,31 @@ function OpenCommandPaletteDialog() {
   const serverConfigQuery = useQuery(serverConfigQueryOptions());
   const keybindings = serverConfigQuery.data?.keybindings ?? [];
   const [viewStack, setViewStack] = useState<CommandPaletteView[]>([]);
-  const currentView = viewStack.length > 0 ? viewStack[viewStack.length - 1]! : null;
+  const currentView = viewStack.at(-1) ?? null;
   const [browseGeneration, setBrowseGeneration] = useState(0);
+  const projectCwdById = useMemo(
+    () => new Map(projects.map((project) => [project.id, project.cwd] as const)),
+    [projects],
+  );
+  const currentProjectId = activeThread?.projectId ?? activeDraftThread?.projectId ?? null;
+  const currentProjectCwd = currentProjectId
+    ? (projectCwdById.get(currentProjectId) ?? null)
+    : null;
   const { data: browseEntries = [] } = useQuery({
-    queryKey: ["filesystemBrowse", debouncedBrowsePath],
+    queryKey: ["filesystemBrowse", debouncedBrowsePath, currentProjectCwd],
     queryFn: async () => {
       const api = readNativeApi();
       if (!api) return [];
-      const result = await api.projects.browseFilesystem({ partialPath: debouncedBrowsePath });
+      const result = await api.filesystem.browse({
+        partialPath: debouncedBrowsePath,
+        ...(currentProjectCwd ? { cwd: currentProjectCwd } : {}),
+      });
       return result.entries;
     },
-    enabled: isBrowsing && debouncedBrowsePath.length > 0,
+    enabled:
+      isBrowsing &&
+      debouncedBrowsePath.length > 0 &&
+      (!debouncedBrowsePath.startsWith(".") || currentProjectCwd !== null),
   });
 
   const projectTitleById = useMemo(
@@ -237,9 +249,8 @@ function OpenCommandPaletteDialog() {
     const actionItems: Array<CommandPaletteActionItem | CommandPaletteSubmenuItem> = [];
 
     if (projects.length > 0) {
-      const activeProjectId = activeThread?.projectId ?? activeDraftThread?.projectId;
-      const activeProjectTitle = activeProjectId
-        ? (projectTitleById.get(activeProjectId) ?? null)
+      const activeProjectTitle = currentProjectId
+        ? (projectTitleById.get(currentProjectId) ?? null)
         : null;
 
       // Quick actions: only show when there's an active thread/draft to derive the project from
@@ -383,6 +394,7 @@ function OpenCommandPaletteDialog() {
   }, [
     activeDraftThread,
     activeThread,
+    currentProjectId,
     handleNewThread,
     navigate,
     projectTitleById,
@@ -431,19 +443,20 @@ function OpenCommandPaletteDialog() {
     const normalizedQuery = normalizeSearchText(searchQuery);
 
     if (normalizedQuery.length === 0) {
-      const sourceGroups = isActionsFilter
-        ? activeGroups.filter((group) => group.value === "actions")
-        : activeGroups;
-      return sourceGroups;
+      if (isActionsFilter) {
+        return activeGroups.filter((group) => group.value === "actions");
+      }
+      return activeGroups;
     }
 
     // When searching at root level, replace the recent-threads group with all threads
     // and add all projects so the full dataset is searchable
-    const baseGroups = isActionsFilter
-      ? activeGroups.filter((group) => group.value === "actions")
-      : currentView === null
-        ? activeGroups.filter((group) => group.value !== "recent-threads")
-        : activeGroups;
+    let baseGroups = activeGroups;
+    if (isActionsFilter) {
+      baseGroups = activeGroups.filter((group) => group.value === "actions");
+    } else if (currentView === null) {
+      baseGroups = activeGroups.filter((group) => group.value !== "recent-threads");
+    }
 
     const extraGroups: CommandPaletteGroup[] = [];
     if (currentView === null && !isActionsFilter) {
@@ -487,41 +500,43 @@ function OpenCommandPaletteDialog() {
     async (rawCwd: string) => {
       const api = readNativeApi();
       if (!api) return;
-      const cwd = normalizeProjectPathForDispatch(rawCwd);
-      if (cwd.length === 0) {
-        return;
-      }
 
-      const existing = findProjectByPath(projects, cwd);
-      if (existing) {
-        const latestThread = threads
-          .filter((thread) => thread.projectId === existing.id)
-          .toSorted(compareThreadsByCreatedAtDesc)[0];
-        if (latestThread) {
-          await navigate({
-            to: "/$threadId",
-            params: { threadId: latestThread.id },
-          });
-        }
+      try {
+        await addProjectFromPath(
+          {
+            api,
+            currentProjectCwd,
+            defaultThreadEnvMode: settings.defaultThreadEnvMode,
+            handleNewThread,
+            navigateToThread: async (threadId) => {
+              await navigate({
+                to: "/$threadId",
+                params: { threadId },
+              });
+            },
+            projects,
+            threads,
+          },
+          rawCwd,
+        );
         setOpen(false);
-        return;
+      } catch (error) {
+        toastManager.add({
+          type: "error",
+          title: "Failed to add project",
+          description: error instanceof Error ? error.message : "An error occurred.",
+        });
       }
-
-      const projectId = newProjectId();
-      const title = inferProjectTitleFromPath(cwd);
-      await api.orchestration.dispatchCommand({
-        type: "project.create",
-        commandId: newCommandId(),
-        projectId,
-        title,
-        workspaceRoot: cwd,
-        defaultModel: DEFAULT_MODEL_BY_PROVIDER.codex,
-        createdAt: new Date().toISOString(),
-      });
-      await handleNewThread(projectId, { envMode: settings.defaultThreadEnvMode }).catch(() => {});
-      setOpen(false);
     },
-    [handleNewThread, navigate, projects, setOpen, settings.defaultThreadEnvMode, threads],
+    [
+      currentProjectCwd,
+      handleNewThread,
+      navigate,
+      projects,
+      setOpen,
+      settings.defaultThreadEnvMode,
+      threads,
+    ],
   );
 
   // Navigate into a subdirectory in browse mode
@@ -624,11 +639,23 @@ function OpenCommandPaletteDialog() {
     [pushView, setOpen],
   );
 
-  const inputPlaceholder = isBrowsing
-    ? "Enter project path (e.g. ~/projects/my-app)"
-    : currentView !== null
-      ? "Search..."
-      : "Search commands, projects, and threads...";
+  let inputPlaceholder = "Search commands, projects, and threads...";
+  if (currentView !== null) {
+    inputPlaceholder = "Search...";
+  }
+  if (isBrowsing) {
+    inputPlaceholder = "Enter project path (e.g. ~/projects/my-app)";
+    if (currentView !== null) {
+      inputPlaceholder = "Enter path (e.g. ~/projects/my-app)";
+    }
+  }
+
+  let inputStartAddon: ReactNode = undefined;
+  if (currentView !== null) {
+    inputStartAddon = currentView.addonIcon;
+  } else if (isBrowsing) {
+    inputStartAddon = <FolderPlusIcon />;
+  }
 
   return (
     <CommandDialogPopup
@@ -647,20 +674,8 @@ function OpenCommandPaletteDialog() {
         <div className="relative">
           <CommandInput
             className={isBrowsing ? "pe-16" : undefined}
-            placeholder={
-              currentView !== null
-                ? isBrowsing
-                  ? "Enter path (e.g. ~/projects/my-app)"
-                  : "Search..."
-                : inputPlaceholder
-            }
-            startAddon={
-              currentView !== null ? (
-                currentView.addonIcon
-              ) : isBrowsing ? (
-                <FolderPlusIcon />
-              ) : undefined
-            }
+            placeholder={inputPlaceholder}
+            startAddon={inputStartAddon}
             onKeyDown={handleKeyDown}
           />
           {isBrowsing ? (

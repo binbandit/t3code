@@ -23,12 +23,66 @@ function preferredPathSeparator(value: string): "/" | "\\" {
   return value.includes("\\") ? "\\" : "/";
 }
 
+function isUncPath(value: string): boolean {
+  return value.startsWith("\\\\");
+}
+
+function isExplicitRelativePath(value: string): boolean {
+  return (
+    value.startsWith("./") ||
+    value.startsWith("../") ||
+    value.startsWith(".\\") ||
+    value.startsWith("..\\")
+  );
+}
+
+function splitAbsolutePath(value: string): {
+  root: string;
+  separator: "/" | "\\";
+  segments: string[];
+} | null {
+  const separator = preferredPathSeparator(value);
+  if (isWindowsDrivePath(value)) {
+    const root = `${value.slice(0, 2)}\\`;
+    const segments = value
+      .slice(root.length)
+      .split(/[\\/]+/)
+      .filter(Boolean);
+    return { root, separator: "\\", segments };
+  }
+  if (isUncPath(value)) {
+    const segments = value.split(/[\\/]+/).filter(Boolean);
+    const [server, share, ...rest] = segments;
+    if (!server || !share) {
+      return null;
+    }
+    return {
+      root: `\\\\${server}\\${share}\\`,
+      separator: "\\",
+      segments: rest,
+    };
+  }
+  if (value.startsWith("/")) {
+    return {
+      root: "/",
+      separator,
+      segments: value
+        .slice(1)
+        .split(/[\\/]+/)
+        .filter(Boolean),
+    };
+  }
+  return null;
+}
+
 export function isFilesystemBrowseQuery(value: string): boolean {
   return (
     value.startsWith("/") ||
     value.startsWith("~/") ||
     value.startsWith("./") ||
     value.startsWith("../") ||
+    value.startsWith(".\\") ||
+    value.startsWith("..\\") ||
     value.startsWith("\\\\") ||
     isWindowsDrivePath(value)
   );
@@ -36,6 +90,37 @@ export function isFilesystemBrowseQuery(value: string): boolean {
 
 export function normalizeProjectPathForDispatch(value: string): string {
   return trimTrailingPathSeparators(value.trim());
+}
+
+export function resolveProjectPathForDispatch(value: string, cwd?: string | null): string {
+  const trimmedValue = value.trim();
+  if (!isExplicitRelativePath(trimmedValue) || !cwd) {
+    return normalizeProjectPathForDispatch(trimmedValue);
+  }
+
+  const absoluteBase = splitAbsolutePath(normalizeProjectPathForDispatch(cwd));
+  if (!absoluteBase) {
+    return normalizeProjectPathForDispatch(trimmedValue);
+  }
+
+  const nextSegments = [...absoluteBase.segments];
+  for (const segment of trimmedValue.split(/[\\/]+/)) {
+    if (segment.length === 0 || segment === ".") {
+      continue;
+    }
+    if (segment === "..") {
+      nextSegments.pop();
+      continue;
+    }
+    nextSegments.push(segment);
+  }
+
+  const joinedPath = nextSegments.join(absoluteBase.separator);
+  if (joinedPath.length === 0) {
+    return normalizeProjectPathForDispatch(absoluteBase.root);
+  }
+
+  return normalizeProjectPathForDispatch(`${absoluteBase.root}${joinedPath}`);
 }
 
 export function normalizeProjectPathForComparison(value: string): string {

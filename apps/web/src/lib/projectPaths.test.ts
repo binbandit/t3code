@@ -8,6 +8,7 @@ import {
   isFilesystemBrowseQuery,
   normalizeProjectPathForComparison,
   normalizeProjectPathForDispatch,
+  resolveProjectPathForDispatch,
 } from "./projectPaths";
 
 describe("projectPaths", () => {
@@ -41,7 +42,14 @@ describe("projectPaths", () => {
   it("detects browse queries across supported path styles", () => {
     expect(isFilesystemBrowseQuery("~/projects")).toBe(true);
     expect(isFilesystemBrowseQuery("C:\\Work\\Repo\\")).toBe(true);
+    expect(isFilesystemBrowseQuery("..\\docs")).toBe(true);
     expect(isFilesystemBrowseQuery("notes")).toBe(false);
+  });
+
+  it("resolves explicit relative paths against the current project", () => {
+    expect(resolveProjectPathForDispatch("./docs", "/repo/app")).toBe("/repo/app/docs");
+    expect(resolveProjectPathForDispatch("../docs", "/repo/app")).toBe("/repo/docs");
+    expect(resolveProjectPathForDispatch("./Repo", "C:\\Work")).toBe("C:\\Work\\Repo");
   });
 
   it("navigates browse paths with matching separators", () => {

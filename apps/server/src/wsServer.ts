@@ -110,6 +110,32 @@ const isServerNotRunningError = (error: Error): boolean => {
   );
 };
 
+function isExplicitRelativePath(value: string): boolean {
+  return (
+    value.startsWith("./") ||
+    value.startsWith("../") ||
+    value.startsWith(".\\") ||
+    value.startsWith("..\\")
+  );
+}
+
+function resolveFilesystemBrowseInputPath(input: {
+  cwd: string | undefined;
+  path: Path.Path;
+  partialPath: string;
+}): Effect.Effect<string | null, never, Path.Path> {
+  return Effect.gen(function* () {
+    if (!isExplicitRelativePath(input.partialPath)) {
+      return input.path.resolve(yield* expandHomePath(input.partialPath));
+    }
+    if (!input.cwd) {
+      return null;
+    }
+    const expandedCwd = yield* expandHomePath(input.cwd);
+    return input.path.resolve(expandedCwd, input.partialPath);
+  });
+}
+
 function rejectUpgrade(socket: Duplex, statusCode: number, message: string): void {
   socket.end(
     `HTTP/1.1 ${statusCode} ${statusCode === 401 ? "Unauthorized" : "Bad Request"}\r\n` +
@@ -868,14 +894,30 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
 
       case WS_METHODS.filesystemBrowse: {
         const body = stripRequestTag(request.body);
-        const expanded = path.resolve(yield* expandHomePath(body.partialPath));
+        const resolvedInputPath = yield* resolveFilesystemBrowseInputPath({
+          cwd: body.cwd,
+          path,
+          partialPath: body.partialPath,
+        });
+        if (resolvedInputPath === null) {
+          return yield* new RouteRequestError({
+            message: "Relative filesystem browse paths require a current project.",
+          });
+        }
+
+        const expanded = resolvedInputPath;
         const endsWithSep = /[\\/]$/.test(body.partialPath) || body.partialPath === "~";
         const parentDir = endsWithSep ? expanded : path.dirname(expanded);
         const prefix = endsWithSep ? "" : path.basename(expanded);
 
-        const names = yield* fileSystem
-          .readDirectory(parentDir)
-          .pipe(Effect.catch(() => Effect.succeed([] as string[])));
+        const names = yield* fileSystem.readDirectory(parentDir).pipe(
+          Effect.mapError(
+            (cause) =>
+              new RouteRequestError({
+                message: `Unable to browse '${parentDir}': ${Cause.pretty(Cause.fail(cause)).trim()}`,
+              }),
+          ),
+        );
 
         const showHidden = prefix.startsWith(".");
         const lowerPrefix = prefix.toLowerCase();
@@ -889,18 +931,19 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
         const entries = yield* Effect.forEach(
           filtered,
           (name) =>
-            fileSystem.stat(path.join(parentDir, name)).pipe(
-              Effect.map((s) =>
-                s.type === "Directory" ? { name, fullPath: path.join(parentDir, name) } : null,
+            fileSystem
+              .stat(path.join(parentDir, name))
+              .pipe(
+                Effect.map((s) =>
+                  s.type === "Directory" ? { name, fullPath: path.join(parentDir, name) } : null,
+                ),
               ),
-              Effect.catch(() => Effect.succeed(null)),
-            ),
           { concurrency: 16 },
         );
 
         return {
           parentPath: parentDir,
-          entries: entries.filter(Boolean).slice(0, 50),
+          entries: entries.filter(Boolean),
         };
       }
 

@@ -320,12 +320,12 @@ describe("wsNativeApi", () => {
     });
   });
 
-  it("forwards filesystem browse requests to the websocket project method", async () => {
+  it("forwards filesystem browse requests to the websocket filesystem method", async () => {
     requestMock.mockResolvedValue({ parentPath: "/tmp", entries: [] });
     const { createWsNativeApi } = await import("./wsNativeApi");
 
     const api = createWsNativeApi();
-    await api.projects.browseFilesystem({
+    await api.filesystem.browse({
       partialPath: "/tmp/project",
     });
 

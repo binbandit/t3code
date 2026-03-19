@@ -28,7 +28,6 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import {
-  DEFAULT_MODEL_BY_PROVIDER,
   type DesktopUpdateState,
   ProjectId,
   ThreadId,
@@ -40,7 +39,7 @@ import { useLocation, useNavigate, useParams } from "@tanstack/react-router";
 import { useAppSettings } from "../appSettings";
 import { isElectron } from "../env";
 import { APP_STAGE_LABEL, APP_VERSION } from "../branding";
-import { isLinuxPlatform, isMacPlatform, newCommandId, newProjectId } from "../lib/utils";
+import { isLinuxPlatform, isMacPlatform, newCommandId } from "../lib/utils";
 import { formatRelativeTime } from "../relativeTime";
 import { useStore } from "../store";
 import { shortcutLabelForCommand } from "../keybindings";
@@ -50,11 +49,7 @@ import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
-import {
-  findProjectByPath,
-  inferProjectTitleFromPath,
-  normalizeProjectPathForDispatch,
-} from "../lib/projectPaths";
+import { addProjectFromPath as runAddProjectFromPath } from "../lib/projectAdd";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
 import { toastManager } from "./ui/toast";
 import { Kbd } from "./ui/kbd";
@@ -270,7 +265,7 @@ export default function Sidebar() {
   const navigate = useNavigate();
   const isOnSettings = useLocation({ select: (loc) => loc.pathname === "/settings" });
   const { settings: appSettings } = useAppSettings();
-  const { handleNewThread } = useHandleNewThread();
+  const { activeDraftThread, activeThread, handleNewThread } = useHandleNewThread();
   const routeThreadId = useParams({
     strict: false,
     select: (params) => (params.threadId ? ThreadId.makeUnsafe(params.threadId) : null),
@@ -380,31 +375,14 @@ export default function Sidebar() {
     });
   }, []);
 
-  const focusMostRecentThreadForProject = useCallback(
-    (projectId: ProjectId) => {
-      const latestThread = threads
-        .filter((thread) => thread.projectId === projectId)
-        .toSorted((a, b) => {
-          const byDate = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-          if (byDate !== 0) return byDate;
-          return b.id.localeCompare(a.id);
-        })[0];
-      if (!latestThread) return;
-
-      void navigate({
-        to: "/$threadId",
-        params: { threadId: latestThread.id },
-      });
-    },
-    [navigate, threads],
-  );
-
-  const addProjectFromPath = useCallback(
+  const addProjectFromInput = useCallback(
     async (rawCwd: string) => {
-      const cwd = normalizeProjectPathForDispatch(rawCwd);
-      if (!cwd || isAddingProject) return;
       const api = readNativeApi();
-      if (!api) return;
+      if (!api || isAddingProject) return;
+      const currentProjectId = activeThread?.projectId ?? activeDraftThread?.projectId ?? null;
+      const currentProjectCwd = currentProjectId
+        ? (projectCwdById.get(currentProjectId) ?? null)
+        : null;
 
       setIsAddingProject(true);
       const finishAddingProject = () => {
@@ -414,29 +392,25 @@ export default function Sidebar() {
         setAddingProject(false);
       };
 
-      const existing = findProjectByPath(projects, cwd);
-      if (existing) {
-        focusMostRecentThreadForProject(existing.id);
-        finishAddingProject();
-        return;
-      }
-
-      const projectId = newProjectId();
-      const createdAt = new Date().toISOString();
-      const title = inferProjectTitleFromPath(cwd);
       try {
-        await api.orchestration.dispatchCommand({
-          type: "project.create",
-          commandId: newCommandId(),
-          projectId,
-          title,
-          workspaceRoot: cwd,
-          defaultModel: DEFAULT_MODEL_BY_PROVIDER.codex,
-          createdAt,
-        });
-        await handleNewThread(projectId, {
-          envMode: appSettings.defaultThreadEnvMode,
-        }).catch(() => undefined);
+        await runAddProjectFromPath(
+          {
+            api,
+            currentProjectCwd,
+            defaultThreadEnvMode: appSettings.defaultThreadEnvMode,
+            handleNewThread,
+            navigateToThread: async (threadId) => {
+              await navigate({
+                to: "/$threadId",
+                params: { threadId },
+              });
+            },
+            projects,
+            threads,
+          },
+          rawCwd,
+        );
+        finishAddingProject();
       } catch (error) {
         const description =
           error instanceof Error ? error.message : "An error occurred while adding the project.";
@@ -450,22 +424,24 @@ export default function Sidebar() {
         } else {
           setAddProjectError(description);
         }
-        return;
       }
-      finishAddingProject();
     },
     [
-      focusMostRecentThreadForProject,
+      activeDraftThread,
+      activeThread,
       handleNewThread,
       isAddingProject,
+      navigate,
+      projectCwdById,
       projects,
       shouldBrowseForProjectImmediately,
+      threads,
       appSettings.defaultThreadEnvMode,
     ],
   );
 
   const handleAddProject = () => {
-    void addProjectFromPath(newCwd);
+    void addProjectFromInput(newCwd);
   };
 
   const canAddProject = newCwd.trim().length > 0 && !isAddingProject;
@@ -481,7 +457,7 @@ export default function Sidebar() {
       // Ignore picker failures and leave the current thread selection unchanged.
     }
     if (pickedPath) {
-      await addProjectFromPath(pickedPath);
+      await addProjectFromInput(pickedPath);
     } else if (!shouldBrowseForProjectImmediately) {
       addProjectInputRef.current?.focus();
     }
