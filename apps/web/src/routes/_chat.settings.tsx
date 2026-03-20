@@ -2,8 +2,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useCallback, useState } from "react";
 import { type ProviderKind, DEFAULT_GIT_TEXT_GENERATION_MODEL } from "@t3tools/contracts";
-import { getModelOptions, normalizeModelSlug } from "@t3tools/shared/model";
+import { getDefaultModel, getModelOptions, normalizeModelSlug } from "@t3tools/shared/model";
 import { getAppModelOptions, MAX_CUSTOM_MODEL_LENGTH, useAppSettings } from "../appSettings";
+import { PROVIDER_OPTIONS } from "../session-logic";
 import { resolveAndPersistPreferredEditor } from "../editorPreferences";
 import { isElectron } from "../env";
 import { useTheme } from "../hooks/useTheme";
@@ -111,6 +112,19 @@ function SettingsRouteView() {
   const codexHomePath = settings.codexHomePath;
   const keybindingsConfigPath = serverConfigQuery.data?.keybindingsConfigPath ?? null;
   const availableEditors = serverConfigQuery.data?.availableEditors;
+
+  const effectiveDefaultProvider: ProviderKind = settings.defaultProvider ?? "codex";
+  const defaultModelOptionsForProvider = getAppModelOptions(
+    effectiveDefaultProvider,
+    settings.customCodexModels,
+    settings.defaultModel,
+  );
+  const effectiveDefaultModel = settings.defaultModel ?? getDefaultModel(effectiveDefaultProvider);
+  const selectedDefaultModelLabel =
+    defaultModelOptionsForProvider.find((option) => option.slug === effectiveDefaultModel)?.name ??
+    effectiveDefaultModel;
+
+  const availableProviderOptions = PROVIDER_OPTIONS.filter((option) => option.available);
 
   const gitTextGenerationModelOptions = getAppModelOptions(
     "codex",
@@ -377,6 +391,108 @@ function SettingsRouteView() {
                     Reset codex overrides
                   </Button>
                 </div>
+              </div>
+            </section>
+
+            <section className="rounded-2xl border border-border bg-card p-5">
+              <div className="mb-4">
+                <h2 className="text-sm font-medium text-foreground">Defaults</h2>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Set the default provider and model for new threads. These are used when no
+                  thread-specific or project-level override is set.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                {availableProviderOptions.length > 1 ? (
+                  <div className="flex flex-col gap-4 rounded-lg border border-border bg-background px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium text-foreground">Default provider</p>
+                      <p className="text-xs text-muted-foreground">
+                        Provider used for new threads when none is specified.
+                      </p>
+                    </div>
+                    <Select
+                      value={effectiveDefaultProvider}
+                      onValueChange={(value) => {
+                        const provider = value as ProviderKind;
+                        updateSettings({
+                          defaultProvider: provider,
+                          // Reset default model when provider changes so it falls back to
+                          // the new provider's built-in default.
+                          defaultModel: undefined,
+                        });
+                      }}
+                    >
+                      <SelectTrigger
+                        className="w-full shrink-0 sm:w-48"
+                        aria-label="Default provider"
+                      >
+                        <SelectValue>
+                          {availableProviderOptions.find(
+                            (option) => option.value === effectiveDefaultProvider,
+                          )?.label ?? effectiveDefaultProvider}
+                        </SelectValue>
+                      </SelectTrigger>
+                      <SelectPopup align="end">
+                        {availableProviderOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectPopup>
+                    </Select>
+                  </div>
+                ) : null}
+
+                <div className="flex flex-col gap-4 rounded-lg border border-border bg-background px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground">Default model</p>
+                    <p className="text-xs text-muted-foreground">
+                      Model used for new threads when no project or thread override is set.
+                    </p>
+                  </div>
+                  <Select
+                    value={effectiveDefaultModel}
+                    onValueChange={(value) => {
+                      if (value) {
+                        updateSettings({ defaultModel: value });
+                      }
+                    }}
+                  >
+                    <SelectTrigger
+                      className="w-full shrink-0 sm:w-48"
+                      aria-label="Default model"
+                    >
+                      <SelectValue>{selectedDefaultModelLabel}</SelectValue>
+                    </SelectTrigger>
+                    <SelectPopup align="end">
+                      {defaultModelOptionsForProvider.map((option) => (
+                        <SelectItem key={option.slug} value={option.slug}>
+                          {option.name}
+                        </SelectItem>
+                      ))}
+                    </SelectPopup>
+                  </Select>
+                </div>
+
+                {(settings.defaultProvider !== defaults.defaultProvider ||
+                  settings.defaultModel !== defaults.defaultModel) ? (
+                  <div className="flex justify-end">
+                    <Button
+                      size="xs"
+                      variant="outline"
+                      onClick={() =>
+                        updateSettings({
+                          defaultProvider: defaults.defaultProvider,
+                          defaultModel: defaults.defaultModel,
+                        })
+                      }
+                    >
+                      Restore defaults
+                    </Button>
+                  </div>
+                ) : null}
               </div>
             </section>
 

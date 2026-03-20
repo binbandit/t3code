@@ -1,6 +1,6 @@
 import { useCallback } from "react";
 import { Option, Schema } from "effect";
-import { TrimmedNonEmptyString, type ProviderKind } from "@t3tools/contracts";
+import { ProviderKind, TrimmedNonEmptyString } from "@t3tools/contracts";
 import { getDefaultModel, getModelOptions, normalizeModelSlug } from "@t3tools/shared/model";
 import { useLocalStorage } from "./hooks/useLocalStorage";
 
@@ -35,6 +35,8 @@ const AppSettingsSchema = Schema.Struct({
     Schema.withConstructorDefault(() => Option.some([])),
   ),
   textGenerationModel: Schema.optional(TrimmedNonEmptyString),
+  defaultProvider: Schema.optional(ProviderKind),
+  defaultModel: Schema.optional(TrimmedNonEmptyString),
 });
 export type AppSettings = typeof AppSettingsSchema.Type;
 export interface AppModelOption {
