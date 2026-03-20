@@ -462,6 +462,7 @@ export default function Sidebar() {
       isAddingProject,
       projects,
       shouldBrowseForProjectImmediately,
+      appSettings.defaultModel,
       appSettings.defaultThreadEnvMode,
     ],
   );
