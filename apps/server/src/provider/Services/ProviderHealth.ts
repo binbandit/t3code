@@ -1,8 +1,8 @@
 /**
  * ProviderHealth - Provider readiness snapshot service.
  *
- * Owns startup-time provider health checks (install/auth reachability) and
- * exposes the cached results to transport layers.
+ * Owns provider health checks (install/auth reachability) and exposes the
+ * latest results to transport layers.
  *
  * @module ProviderHealth
  */
