@@ -1,5 +1,6 @@
 import { type KeybindingCommand, type FilesystemBrowseEntry } from "@t3tools/contracts";
 import { type ReactNode } from "react";
+import { compareThreadsByMostRecentDesc } from "../lib/projectAdd";
 import { formatRelativeTime } from "../relativeTime";
 import { type Project, type Thread } from "../types";
 
@@ -46,17 +47,6 @@ export interface CommandPaletteView {
 
 export type CommandPaletteMode = "root" | "root-browse" | "submenu" | "submenu-browse";
 
-export function compareThreadsByCreatedAtDesc(
-  left: { id: string; createdAt: string },
-  right: { id: string; createdAt: string },
-): number {
-  const byTimestamp = Date.parse(right.createdAt) - Date.parse(left.createdAt);
-  if (!Number.isNaN(byTimestamp) && byTimestamp !== 0) {
-    return byTimestamp;
-  }
-  return right.id.localeCompare(left.id);
-}
-
 export function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -88,7 +78,7 @@ export function buildThreadActionItems(input: {
   runThread: (threadId: Thread["id"]) => Promise<void>;
   limit?: number;
 }): CommandPaletteActionItem[] {
-  const sortedThreads = input.threads.toSorted(compareThreadsByCreatedAtDesc);
+  const sortedThreads = input.threads.toSorted(compareThreadsByMostRecentDesc);
   const visibleThreads =
     input.limit === undefined ? sortedThreads : sortedThreads.slice(0, input.limit);
 
@@ -112,7 +102,7 @@ export function buildThreadActionItems(input: {
       label: `${thread.title} ${projectTitle ?? ""} ${thread.branch ?? ""}`.trim(),
       title: thread.title,
       description: descriptionParts.join(" · "),
-      timestamp: formatRelativeTime(thread.createdAt),
+      timestamp: formatRelativeTime(thread.updatedAt ?? thread.createdAt, Date.now(), "short"),
       icon: input.icon,
       run: async () => {
         await input.runThread(thread.id);

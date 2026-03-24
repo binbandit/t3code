@@ -23,6 +23,7 @@ interface ThreadLike {
   readonly id: ThreadId;
   readonly projectId: ProjectId;
   readonly createdAt: string;
+  readonly updatedAt?: string | undefined;
 }
 
 interface AddProjectFromPathContext {
@@ -41,12 +42,21 @@ interface AddProjectFromPathContext {
 
 export type AddProjectFromPathResult = "created" | "existing" | "noop";
 
-function compareThreadsByCreatedAtDesc(
-  left: { id: string; createdAt: string },
-  right: { id: string; createdAt: string },
+function resolveMostRecentThreadTimestamp(thread: {
+  createdAt: string;
+  updatedAt?: string | undefined;
+}): number {
+  const timestamp = Date.parse(thread.updatedAt ?? thread.createdAt);
+  return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp;
+}
+
+export function compareThreadsByMostRecentDesc(
+  left: { id: string; createdAt: string; updatedAt?: string | undefined },
+  right: { id: string; createdAt: string; updatedAt?: string | undefined },
 ): number {
-  const byTimestamp = Date.parse(right.createdAt) - Date.parse(left.createdAt);
-  if (!Number.isNaN(byTimestamp) && byTimestamp !== 0) {
+  const byTimestamp =
+    resolveMostRecentThreadTimestamp(right) - resolveMostRecentThreadTimestamp(left);
+  if (byTimestamp !== 0) {
     return byTimestamp;
   }
   return right.id.localeCompare(left.id);
@@ -73,7 +83,7 @@ export async function addProjectFromPath(
   if (existing) {
     const latestThread = context.threads
       .filter((thread) => thread.projectId === existing.id)
-      .toSorted(compareThreadsByCreatedAtDesc)[0];
+      .toSorted(compareThreadsByMostRecentDesc)[0];
     if (latestThread) {
       await context.navigateToThread(latestThread.id);
     }
