@@ -1626,6 +1626,38 @@ describe("WebSocket Server", () => {
     });
   });
 
+  it("includes hidden directories when browsing a full directory", async () => {
+    const workspace = makeTempDir("t3code-ws-filesystem-browse-hidden-");
+    fs.mkdirSync(path.join(workspace, ".config"), { recursive: true });
+    fs.mkdirSync(path.join(workspace, "docs"), { recursive: true });
+
+    server = await createTestServer({ cwd: "/test" });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const response = await sendRequest(ws, WS_METHODS.filesystemBrowse, {
+      partialPath: `${workspace}/`,
+    });
+
+    expect(response.error).toBeUndefined();
+    expect(response.result).toEqual({
+      parentPath: workspace,
+      entries: [
+        {
+          name: ".config",
+          fullPath: path.join(workspace, ".config"),
+        },
+        {
+          name: "docs",
+          fullPath: path.join(workspace, "docs"),
+        },
+      ],
+    });
+  });
+
   it("skips unreadable or broken browse entries instead of failing the request", async () => {
     if (process.platform === "win32") {
       return;

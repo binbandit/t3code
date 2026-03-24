@@ -2,8 +2,12 @@ import { describe, expect, it } from "vitest";
 
 import {
   appendBrowsePathSegment,
+  canNavigateUp,
+  getBrowseDirectoryPath,
   findProjectByPath,
+  getBrowseLeafPathSegment,
   getBrowseParentPath,
+  hasTrailingPathSeparator,
   inferProjectTitleFromPath,
   isExplicitRelativeProjectPath,
   isFilesystemBrowseQuery,
@@ -72,5 +76,20 @@ describe("projectPaths", () => {
     expect(getBrowseParentPath("/repo/src/")).toBe("/repo/");
     expect(getBrowseParentPath("C:\\Work\\Repo\\")).toBe("C:\\Work\\");
     expect(getBrowseParentPath("C:\\")).toBeNull();
+  });
+
+  it("detects browse path boundaries", () => {
+    expect(hasTrailingPathSeparator("/repo/src/")).toBe(true);
+    expect(hasTrailingPathSeparator("/repo/src")).toBe(false);
+    expect(getBrowseDirectoryPath("/repo/src")).toBe("/repo/");
+    expect(getBrowseDirectoryPath("/repo/src/")).toBe("/repo/src/");
+    expect(getBrowseLeafPathSegment("/repo/src")).toBe("src");
+    expect(getBrowseLeafPathSegment("C:\\Work\\Repo\\Docs")).toBe("Docs");
+  });
+
+  it("only allows browse-up after entering a directory", () => {
+    expect(canNavigateUp("~/repo")).toBe(false);
+    expect(canNavigateUp("~/a")).toBe(false);
+    expect(canNavigateUp("~/repo/")).toBe(true);
   });
 });

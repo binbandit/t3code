@@ -25,6 +25,10 @@ function preferredPathSeparator(value: string): "/" | "\\" {
   return value.includes("\\") ? "\\" : "/";
 }
 
+export function hasTrailingPathSeparator(value: string): boolean {
+  return /[\\/]$/.test(value);
+}
+
 function isUncPath(value: string): boolean {
   return value.startsWith("\\\\");
 }
@@ -162,8 +166,25 @@ export function inferProjectTitleFromPath(value: string): string {
 
 export function appendBrowsePathSegment(currentPath: string, segment: string): string {
   const separator = preferredPathSeparator(currentPath);
-  const parentPath = currentPath.replace(/[^/\\]*$/, "");
-  return `${parentPath}${segment}${separator}`;
+  return `${getBrowseDirectoryPath(currentPath)}${segment}${separator}`;
+}
+
+export function getBrowseLeafPathSegment(currentPath: string): string {
+  const lastSeparatorIndex = Math.max(currentPath.lastIndexOf("/"), currentPath.lastIndexOf("\\"));
+  return currentPath.slice(lastSeparatorIndex + 1);
+}
+
+export function getBrowseDirectoryPath(currentPath: string): string {
+  if (hasTrailingPathSeparator(currentPath)) {
+    return currentPath;
+  }
+
+  const lastSeparatorIndex = Math.max(currentPath.lastIndexOf("/"), currentPath.lastIndexOf("\\"));
+  if (lastSeparatorIndex < 0) {
+    return currentPath;
+  }
+
+  return currentPath.slice(0, lastSeparatorIndex + 1);
 }
 
 export function getBrowseParentPath(currentPath: string): string | null {
@@ -180,4 +201,8 @@ export function getBrowseParentPath(currentPath: string): string | null {
   }
 
   return trimmed.slice(0, lastSeparatorIndex + 1);
+}
+
+export function canNavigateUp(currentPath: string): boolean {
+  return hasTrailingPathSeparator(currentPath) && getBrowseParentPath(currentPath) !== null;
 }
