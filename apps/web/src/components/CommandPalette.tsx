@@ -512,7 +512,8 @@ function OpenCommandPaletteDialog() {
     setBrowseGeneration((generation) => generation + 1);
   }, [query]);
 
-  const canBrowseUp = isBrowsing && !relativePathNeedsActiveProject && canNavigateUp(query);
+  const canBrowseUp =
+    isBrowsing && !relativePathNeedsActiveProject && canNavigateUp(browseDirectoryPath);
 
   const browseGroups = useMemo(
     () =>
