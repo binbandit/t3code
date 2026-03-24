@@ -932,7 +932,7 @@ export const createServer = Effect.fn(function* (): Effect.fn.Return<
           ),
         );
 
-        const showHidden = prefix.startsWith(".");
+        const showHidden = endsWithSep || prefix.startsWith(".");
         const lowerPrefix = prefix.toLowerCase();
         const filtered = names
           .filter(

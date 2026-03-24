@@ -1,8 +1,8 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
+import { type FilesystemBrowseResult } from "@t3tools/contracts";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
-import { useDebouncedValue } from "@tanstack/react-pacer";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -31,7 +31,11 @@ import {
 } from "../lib/chatThreadActions";
 import {
   appendBrowsePathSegment,
+  canNavigateUp,
+  getBrowseDirectoryPath,
+  getBrowseLeafPathSegment,
   getBrowseParentPath,
+  hasTrailingPathSeparator,
   isExplicitRelativeProjectPath,
   isFilesystemBrowseQuery,
 } from "../lib/projectPaths";
@@ -69,6 +73,9 @@ import {
 import { Kbd, KbdGroup } from "./ui/kbd";
 import { toastManager } from "./ui/toast";
 
+const EMPTY_BROWSE_ENTRIES: FilesystemBrowseResult["entries"] = [];
+const BROWSE_STALE_TIME_MS = 30_000;
+
 export function CommandPalette({ children }: { children: ReactNode }) {
   const open = useCommandPaletteStore((store) => store.open);
   const setOpen = useCommandPaletteStore((store) => store.setOpen);
@@ -105,7 +112,7 @@ function OpenCommandPaletteDialog() {
   const deferredQuery = useDeferredValue(query);
   const isActionsOnly = query.startsWith(">");
   const isBrowsing = isFilesystemBrowseQuery(query);
-  const [debouncedBrowsePath] = useDebouncedValue(query, { wait: 200 });
+  const queryClient = useQueryClient();
   const [highlightedItemValue, setHighlightedItemValue] = useState<string | null>(null);
   const { settings } = useAppSettings();
   const { activeDraftThread, activeThread, handleNewThread, projects } = useHandleNewThread();
@@ -132,24 +139,86 @@ function OpenCommandPaletteDialog() {
     : null;
   const relativePathNeedsActiveProject =
     isExplicitRelativeProjectPath(query.trim()) && currentProjectCwd === null;
-  const debouncedRelativePathNeedsActiveProject =
-    isExplicitRelativeProjectPath(debouncedBrowsePath.trim()) && currentProjectCwd === null;
+  const browseDirectoryPath = isBrowsing ? getBrowseDirectoryPath(query) : "";
+  const browseFilterQuery =
+    isBrowsing && !hasTrailingPathSeparator(query) ? getBrowseLeafPathSegment(query) : "";
 
-  const { data: browseEntries = [] } = useQuery({
-    queryKey: ["filesystemBrowse", debouncedBrowsePath, currentProjectCwd],
-    queryFn: async () => {
+  const fetchBrowseResult = useCallback(
+    async (partialPath: string): Promise<FilesystemBrowseResult | null> => {
       const api = readNativeApi();
-      if (!api) return [];
-
-      const result = await api.filesystem.browse({
-        partialPath: debouncedBrowsePath,
+      if (!api) return null;
+      return api.filesystem.browse({
+        partialPath,
         ...(currentProjectCwd ? { cwd: currentProjectCwd } : {}),
       });
-      return result.entries;
     },
-    enabled:
-      isBrowsing && debouncedBrowsePath.length > 0 && !debouncedRelativePathNeedsActiveProject,
+    [currentProjectCwd],
+  );
+
+  const { data: browseResult } = useQuery({
+    queryKey: ["filesystemBrowse", browseDirectoryPath, currentProjectCwd],
+    queryFn: () => fetchBrowseResult(browseDirectoryPath),
+    staleTime: BROWSE_STALE_TIME_MS,
+    enabled: isBrowsing && browseDirectoryPath.length > 0 && !relativePathNeedsActiveProject,
   });
+  const browseEntries = browseResult?.entries ?? EMPTY_BROWSE_ENTRIES;
+  const filteredBrowseEntries = useMemo(() => {
+    const lowerFilter = browseFilterQuery.toLowerCase();
+    const showHidden = browseFilterQuery.startsWith(".");
+
+    return browseEntries.filter(
+      (entry) =>
+        entry.name.toLowerCase().startsWith(lowerFilter) &&
+        (showHidden || !entry.name.startsWith(".")),
+    );
+  }, [browseEntries, browseFilterQuery]);
+
+  const prefetchBrowsePath = useCallback(
+    (partialPath: string) => {
+      void queryClient.prefetchQuery({
+        queryKey: ["filesystemBrowse", partialPath, currentProjectCwd],
+        queryFn: () => fetchBrowseResult(partialPath),
+        staleTime: BROWSE_STALE_TIME_MS,
+      });
+    },
+    [currentProjectCwd, fetchBrowseResult, queryClient],
+  );
+
+  const highlightedBrowseEntry = useMemo(() => {
+    if (!highlightedItemValue?.startsWith("browse:")) {
+      return null;
+    }
+
+    const highlightedPath = highlightedItemValue.slice("browse:".length);
+    return filteredBrowseEntries.find((entry) => entry.fullPath === highlightedPath) ?? null;
+  }, [filteredBrowseEntries, highlightedItemValue]);
+
+  const exactBrowseEntry = useMemo(() => {
+    if (browseFilterQuery.length === 0) return null;
+    return filteredBrowseEntries.find((entry) => entry.name === browseFilterQuery) ?? null;
+  }, [filteredBrowseEntries, browseFilterQuery]);
+
+  // Prefetch the parent and the most likely next child so browse navigation
+  // stays warm without scanning every child directory in large trees.
+  useEffect(() => {
+    if (!isBrowsing || filteredBrowseEntries.length === 0) return;
+
+    if (canNavigateUp(query)) {
+      prefetchBrowsePath(getBrowseParentPath(query)!);
+    }
+
+    const nextChild = highlightedBrowseEntry ?? exactBrowseEntry;
+    if (nextChild) {
+      prefetchBrowsePath(appendBrowsePathSegment(query, nextChild.name));
+    }
+  }, [
+    exactBrowseEntry,
+    filteredBrowseEntries.length,
+    highlightedBrowseEntry,
+    isBrowsing,
+    prefetchBrowsePath,
+    query,
+  ]);
 
   const projectThreadItems = useMemo(
     () =>
@@ -424,8 +493,9 @@ function OpenCommandPaletteDialog() {
 
   const browseTo = useCallback(
     (name: string) => {
+      const nextQuery = appendBrowsePathSegment(query, name);
       setHighlightedItemValue(null);
-      setQuery(appendBrowsePathSegment(query, name));
+      setQuery(nextQuery);
       setBrowseGeneration((generation) => generation + 1);
     },
     [query],
@@ -442,13 +512,12 @@ function OpenCommandPaletteDialog() {
     setBrowseGeneration((generation) => generation + 1);
   }, [query]);
 
-  const canBrowseUp =
-    isBrowsing && !relativePathNeedsActiveProject && getBrowseParentPath(query) !== null;
+  const canBrowseUp = isBrowsing && !relativePathNeedsActiveProject && canNavigateUp(query);
 
   const browseGroups = useMemo(
     () =>
       buildBrowseGroups({
-        browseEntries,
+        browseEntries: filteredBrowseEntries,
         browseQuery: query,
         canBrowseUp,
         upIcon: <CornerLeftUpIcon className={ITEM_ICON_CLASS} />,
@@ -456,7 +525,7 @@ function OpenCommandPaletteDialog() {
         browseUp,
         browseTo,
       }),
-    [browseEntries, browseTo, browseUp, canBrowseUp, query],
+    [filteredBrowseEntries, browseTo, browseUp, canBrowseUp, query],
   );
 
   const displayedGroups = useMemo(
