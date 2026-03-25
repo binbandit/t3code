@@ -326,6 +326,18 @@ function createDraftOnlySnapshot(): OrchestrationReadModel {
   };
 }
 
+function createProjectlessSnapshot(): OrchestrationReadModel {
+  const snapshot = createSnapshotForTargetUser({
+    targetMessageId: "msg-user-projectless-target" as MessageId,
+    targetText: "projectless",
+  });
+  return {
+    ...snapshot,
+    projects: [],
+    threads: [],
+  };
+}
+
 function withProjectScripts(
   snapshot: OrchestrationReadModel,
   scripts: OrchestrationReadModel["projects"][number]["scripts"],
@@ -1809,6 +1821,46 @@ describe("ChatView timeline estimator parity (full app)", () => {
         (path) => UUID_ROUTE_RE.test(path),
         "Route should have changed to a new draft thread UUID from the shortcut.",
       );
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("does not consume chat.new when there is no project context", async () => {
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createProjectlessSnapshot(),
+      configureFixture: (nextFixture) => {
+        nextFixture.serverConfig = {
+          ...nextFixture.serverConfig,
+          keybindings: [
+            {
+              command: "chat.new",
+              shortcut: {
+                key: "o",
+                metaKey: false,
+                ctrlKey: false,
+                shiftKey: true,
+                altKey: false,
+                modKey: true,
+              },
+              whenAst: {
+                type: "not",
+                node: { type: "identifier", name: "terminalFocus" },
+              },
+            },
+          ],
+        };
+      },
+    });
+
+    try {
+      await waitForServerConfigToApply();
+      dispatchChatNewShortcut();
+      await waitForLayout();
+
+      expect(mounted.router.state.location.pathname).toBe(`/${THREAD_ID}`);
+      expect(Object.keys(useComposerDraftStore.getState().draftThreadsByThreadId)).toHaveLength(0);
     } finally {
       await mounted.cleanup();
     }

@@ -8,6 +8,7 @@ import { useCommandPaletteStore } from "../commandPaletteStore";
 import ThreadSidebar from "../components/Sidebar";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import {
+  resolveThreadActionProjectId,
   startNewLocalThreadFromContext,
   startNewThreadFromContext,
 } from "../lib/chatThreadActions";
@@ -68,29 +69,32 @@ function ChatRouteGlobalShortcuts() {
         return;
       }
 
-      if (command === "chat.newLocal") {
-        event.preventDefault();
-        event.stopPropagation();
-        void startNewLocalThreadFromContext({
-          activeDraftThread,
-          activeThread,
-          defaultThreadEnvMode: appSettings.defaultThreadEnvMode,
-          handleNewThread,
-          projects,
-        });
+      if (command !== "chat.new" && command !== "chat.newLocal") {
         return;
       }
 
-      if (command !== "chat.new") return;
-      event.preventDefault();
-      event.stopPropagation();
-      void startNewThreadFromContext({
+      const threadActionContext = {
         activeDraftThread,
         activeThread,
         defaultThreadEnvMode: appSettings.defaultThreadEnvMode,
         handleNewThread,
         projects,
-      });
+      } as const;
+
+      if (!resolveThreadActionProjectId(threadActionContext)) {
+        return;
+      }
+
+      if (command === "chat.newLocal") {
+        event.preventDefault();
+        event.stopPropagation();
+        void startNewLocalThreadFromContext(threadActionContext);
+        return;
+      }
+
+      event.preventDefault();
+      event.stopPropagation();
+      void startNewThreadFromContext(threadActionContext);
     };
 
     window.addEventListener("keydown", onWindowKeyDown);
