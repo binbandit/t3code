@@ -100,8 +100,10 @@ export async function addProjectFromPath(
     defaultModel: DEFAULT_MODEL_BY_PROVIDER.codex,
     createdAt: new Date().toISOString(),
   });
-  await context.handleNewThread(projectId, {
-    envMode: context.defaultThreadEnvMode,
-  });
+  await context
+    .handleNewThread(projectId, {
+      envMode: context.defaultThreadEnvMode,
+    })
+    .catch(() => undefined);
   return "created";
 }

@@ -1,8 +1,10 @@
+import {
+  isExplicitRelativePath,
+  isUncPath,
+  isWindowsAbsolutePath,
+  isWindowsDrivePath,
+} from "@t3tools/shared/path";
 import { isWindowsPlatform } from "./utils";
-
-function isWindowsDrivePath(value: string): boolean {
-  return /^[a-zA-Z]:([/\\]|$)/.test(value);
-}
 
 function isRootPath(value: string): boolean {
   return value === "/" || value === "\\" || /^[a-zA-Z]:[/\\]?$/.test(value);
@@ -29,20 +31,7 @@ export function hasTrailingPathSeparator(value: string): boolean {
   return /[\\/]$/.test(value);
 }
 
-function isUncPath(value: string): boolean {
-  return value.startsWith("\\\\");
-}
-
-export function isExplicitRelativeProjectPath(value: string): boolean {
-  return (
-    value === "." ||
-    value === ".." ||
-    value.startsWith("./") ||
-    value.startsWith("../") ||
-    value.startsWith(".\\") ||
-    value.startsWith("..\\")
-  );
-}
+export { isExplicitRelativePath as isExplicitRelativeProjectPath };
 
 function splitAbsolutePath(value: string): {
   root: string;
@@ -89,20 +78,15 @@ export function isFilesystemBrowseQuery(
 ): boolean {
   const allowWindowsPaths = isWindowsPlatform(platform);
   return (
-    value === "." ||
-    value === ".." ||
+    isExplicitRelativePath(value) ||
     value.startsWith("/") ||
     value.startsWith("~/") ||
-    value.startsWith("./") ||
-    value.startsWith("../") ||
-    value.startsWith(".\\") ||
-    value.startsWith("..\\") ||
-    (allowWindowsPaths && (value.startsWith("\\\\") || isWindowsDrivePath(value)))
+    (allowWindowsPaths && isWindowsAbsolutePath(value))
   );
 }
 
 export function isUnsupportedWindowsProjectPath(value: string, platform: string): boolean {
-  return (isWindowsDrivePath(value) || isUncPath(value)) && !isWindowsPlatform(platform);
+  return isWindowsAbsolutePath(value) && !isWindowsPlatform(platform);
 }
 
 export function normalizeProjectPathForDispatch(value: string): string {
@@ -111,7 +95,7 @@ export function normalizeProjectPathForDispatch(value: string): string {
 
 export function resolveProjectPathForDispatch(value: string, cwd?: string | null): string {
   const trimmedValue = value.trim();
-  if (!isExplicitRelativeProjectPath(trimmedValue) || !cwd) {
+  if (!isExplicitRelativePath(trimmedValue) || !cwd) {
     return normalizeProjectPathForDispatch(trimmedValue);
   }
 

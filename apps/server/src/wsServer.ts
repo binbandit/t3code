@@ -77,6 +77,7 @@ import { AnalyticsService } from "./telemetry/Services/AnalyticsService.ts";
 import { expandHomePath } from "./os-jank.ts";
 import { makeServerPushBus } from "./wsServer/pushBus.ts";
 import { makeServerReadiness } from "./wsServer/readiness.ts";
+import { isExplicitRelativePath, isWindowsAbsolutePath } from "@t3tools/shared/path";
 import { decodeJsonResult, formatSchemaError } from "@t3tools/shared/schemaJson";
 
 /**
@@ -109,25 +110,6 @@ const isServerNotRunningError = (error: Error): boolean => {
     maybeCode === "ERR_SERVER_NOT_RUNNING" || error.message.toLowerCase().includes("not running")
   );
 };
-
-function isWindowsDrivePath(value: string): boolean {
-  return /^[a-zA-Z]:([/\\]|$)/.test(value);
-}
-
-function isWindowsAbsolutePath(value: string): boolean {
-  return value.startsWith("\\\\") || isWindowsDrivePath(value);
-}
-
-function isExplicitRelativePath(value: string): boolean {
-  return (
-    value === "." ||
-    value === ".." ||
-    value.startsWith("./") ||
-    value.startsWith("../") ||
-    value.startsWith(".\\") ||
-    value.startsWith("..\\")
-  );
-}
 
 function resolveFilesystemBrowseInputPath(input: {
   cwd: string | undefined;
