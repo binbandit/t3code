@@ -455,7 +455,10 @@ function OpenCommandPaletteDialog() {
           projectId,
           title: inferProjectTitleFromPath(cwd),
           workspaceRoot: cwd,
-          defaultModel: DEFAULT_MODEL_BY_PROVIDER.codex,
+          defaultModelSelection: {
+            provider: "codex",
+            model: DEFAULT_MODEL_BY_PROVIDER.codex,
+          },
           createdAt: new Date().toISOString(),
         });
         await handleNewThread(projectId, {

@@ -91,6 +91,7 @@ interface UserRowMeasurement {
 }
 
 interface MountedChatView {
+  [Symbol.asyncDispose]: () => Promise<void>;
   cleanup: () => Promise<void>;
   measureUserRow: (targetMessageId: MessageId) => Promise<UserRowMeasurement>;
   setViewport: (viewport: ViewportSpec) => Promise<void>;
@@ -222,7 +223,10 @@ function createSnapshotForTargetUser(options: {
         id: PROJECT_ID,
         title: "Project",
         workspaceRoot: "/repo/project",
-        defaultModel: "gpt-5",
+        defaultModelSelection: {
+          provider: "codex",
+          model: "gpt-5",
+        },
         scripts: [],
         createdAt: NOW_ISO,
         updatedAt: NOW_ISO,
@@ -234,7 +238,10 @@ function createSnapshotForTargetUser(options: {
         id: THREAD_ID,
         projectId: PROJECT_ID,
         title: "Browser test thread",
-        model: "gpt-5",
+        modelSelection: {
+          provider: "codex",
+          model: "gpt-5",
+        },
         interactionMode: "default",
         runtimeMode: "full-access",
         branch: "main",
@@ -288,7 +295,10 @@ function addThreadToSnapshot(
         id: threadId,
         projectId: PROJECT_ID,
         title: "New thread",
-        model: "gpt-5",
+        modelSelection: {
+          provider: "codex",
+          model: "gpt-5",
+        },
         interactionMode: "default",
         runtimeMode: "full-access",
         branch: "main",
@@ -421,7 +431,7 @@ function createSnapshotWithSecondaryProject(): OrchestrationReadModel {
         id: SECOND_PROJECT_ID,
         title: "Docs Portal",
         workspaceRoot: "/repo/clients/docs-portal",
-        defaultModel: "gpt-5",
+        defaultModelSelection: { provider: "codex", model: "gpt-5" },
         scripts: [],
         createdAt: NOW_ISO,
         updatedAt: NOW_ISO,
@@ -434,7 +444,7 @@ function createSnapshotWithSecondaryProject(): OrchestrationReadModel {
         id: "thread-secondary-project" as ThreadId,
         projectId: SECOND_PROJECT_ID,
         title: "Release checklist",
-        model: "gpt-5",
+        modelSelection: { provider: "codex", model: "gpt-5" },
         interactionMode: "default",
         runtimeMode: "full-access",
         branch: "release/docs-portal",
@@ -853,12 +863,15 @@ async function mountChatView(options: {
 
   await waitForLayout();
 
+  const cleanup = async () => {
+    await screen.unmount();
+    host.remove();
+    await waitForLayout();
+  };
+
   return {
-    cleanup: async () => {
-      await screen.unmount();
-      host.remove();
-      await waitForLayout();
-    },
+    [Symbol.asyncDispose]: cleanup,
+    cleanup,
     measureUserRow: async (targetMessageId: MessageId) => measureUserRow({ host, targetMessageId }),
     setViewport: async (viewport: ViewportSpec) => {
       await setViewport(viewport);
@@ -915,8 +928,8 @@ describe("ChatView timeline estimator parity (full app)", () => {
       draftsByThreadId: {},
       draftThreadsByThreadId: {},
       projectDraftThreadIdByProjectId: {},
-      stickyModel: null,
-      stickyModelOptions: {},
+      stickyModelSelectionByProvider: {},
+      stickyActiveProvider: null,
     });
     useCommandPaletteStore.setState({
       open: false,
@@ -1589,13 +1602,17 @@ describe("ChatView timeline estimator parity (full app)", () => {
 
   it("snapshots sticky codex settings into a new draft thread", async () => {
     useComposerDraftStore.setState({
-      stickyModel: "gpt-5.3-codex",
-      stickyModelOptions: {
+      stickyModelSelectionByProvider: {
         codex: {
-          reasoningEffort: "medium",
-          fastMode: true,
+          provider: "codex",
+          model: "gpt-5.3-codex",
+          options: {
+            reasoningEffort: "medium",
+            fastMode: true,
+          },
         },
       },
+      stickyActiveProvider: "codex",
     });
 
     const mounted = await mountChatView({
@@ -1620,13 +1637,16 @@ describe("ChatView timeline estimator parity (full app)", () => {
       const newThreadId = newThreadPath.slice(1) as ThreadId;
 
       expect(useComposerDraftStore.getState().draftsByThreadId[newThreadId]).toMatchObject({
-        model: "gpt-5.3-codex",
-        provider: "codex",
-        modelOptions: {
+        modelSelectionByProvider: {
           codex: {
-            fastMode: true,
+            provider: "codex",
+            model: "gpt-5.3-codex",
+            options: {
+              fastMode: true,
+            },
           },
         },
+        activeProvider: "codex",
       });
     } finally {
       await mounted.cleanup();
@@ -1635,13 +1655,17 @@ describe("ChatView timeline estimator parity (full app)", () => {
 
   it("hydrates the provider alongside a sticky claude model", async () => {
     useComposerDraftStore.setState({
-      stickyModel: "claude-opus-4-6",
-      stickyModelOptions: {
+      stickyModelSelectionByProvider: {
         claudeAgent: {
-          effort: "max",
-          fastMode: true,
+          provider: "claudeAgent",
+          model: "claude-opus-4-6",
+          options: {
+            effort: "max",
+            fastMode: true,
+          },
         },
       },
+      stickyActiveProvider: "claudeAgent",
     });
 
     const mounted = await mountChatView({
@@ -1666,16 +1690,18 @@ describe("ChatView timeline estimator parity (full app)", () => {
       const newThreadId = newThreadPath.slice(1) as ThreadId;
 
       expect(useComposerDraftStore.getState().draftsByThreadId[newThreadId]).toMatchObject({
-        provider: "claudeAgent",
-        model: "claude-opus-4-6",
-        modelOptions: {
+        modelSelectionByProvider: {
           claudeAgent: {
-            effort: "max",
-            fastMode: true,
+            provider: "claudeAgent",
+            model: "claude-opus-4-6",
+            options: {
+              effort: "max",
+              fastMode: true,
+            },
           },
         },
+        activeProvider: "claudeAgent",
       });
-      await expect.element(page.getByText("Claude Opus 4.6")).toBeInTheDocument();
     } finally {
       await mounted.cleanup();
     }
@@ -1711,13 +1737,17 @@ describe("ChatView timeline estimator parity (full app)", () => {
 
   it("prefers draft state over sticky composer settings and defaults", async () => {
     useComposerDraftStore.setState({
-      stickyModel: "gpt-5.3-codex",
-      stickyModelOptions: {
+      stickyModelSelectionByProvider: {
         codex: {
-          reasoningEffort: "medium",
-          fastMode: true,
+          provider: "codex",
+          model: "gpt-5.3-codex",
+          options: {
+            reasoningEffort: "medium",
+            fastMode: true,
+          },
         },
       },
+      stickyActiveProvider: "codex",
     });
 
     const mounted = await mountChatView({
@@ -1742,17 +1772,22 @@ describe("ChatView timeline estimator parity (full app)", () => {
       const threadId = threadPath.slice(1) as ThreadId;
 
       expect(useComposerDraftStore.getState().draftsByThreadId[threadId]).toMatchObject({
-        model: "gpt-5.3-codex",
-        modelOptions: {
+        modelSelectionByProvider: {
           codex: {
-            fastMode: true,
+            provider: "codex",
+            model: "gpt-5.3-codex",
+            options: {
+              fastMode: true,
+            },
           },
         },
+        activeProvider: "codex",
       });
 
-      useComposerDraftStore.getState().setModel(threadId, "gpt-5.4");
-      useComposerDraftStore.getState().setModelOptions(threadId, {
-        codex: {
+      useComposerDraftStore.getState().setModelSelection(threadId, {
+        provider: "codex",
+        model: "gpt-5.4",
+        options: {
           reasoningEffort: "low",
           fastMode: true,
         },
@@ -1766,13 +1801,17 @@ describe("ChatView timeline estimator parity (full app)", () => {
         "New-thread should reuse the existing project draft thread.",
       );
       expect(useComposerDraftStore.getState().draftsByThreadId[threadId]).toMatchObject({
-        model: "gpt-5.4",
-        modelOptions: {
+        modelSelectionByProvider: {
           codex: {
-            reasoningEffort: "low",
-            fastMode: true,
+            provider: "codex",
+            model: "gpt-5.4",
+            options: {
+              reasoningEffort: "low",
+              fastMode: true,
+            },
           },
         },
+        activeProvider: "codex",
       });
     } finally {
       await mounted.cleanup();

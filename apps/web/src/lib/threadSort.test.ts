@@ -9,7 +9,7 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     codexThreadId: null,
     projectId: ProjectId.makeUnsafe("project-1"),
     title: "Thread",
-    model: "gpt-5.4",
+    modelSelection: { provider: "codex", model: "gpt-5.4" },
     runtimeMode: DEFAULT_RUNTIME_MODE,
     interactionMode: "default",
     session: null,
