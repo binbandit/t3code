@@ -1,4 +1,4 @@
-import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "../appSettings";
+import type { SidebarProjectSortOrder } from "../appSettings";
 import { getThreadSortTimestamp } from "../lib/threadSort";
 import type { Thread } from "../types";
 import { cn } from "../lib/utils";
