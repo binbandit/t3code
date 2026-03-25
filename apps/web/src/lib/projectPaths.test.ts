@@ -46,6 +46,8 @@ describe("projectPaths", () => {
   });
 
   it("detects browse queries across supported path styles", () => {
+    expect(isFilesystemBrowseQuery(".")).toBe(true);
+    expect(isFilesystemBrowseQuery("..")).toBe(true);
     expect(isFilesystemBrowseQuery("~/projects")).toBe(true);
     expect(isFilesystemBrowseQuery("..\\docs")).toBe(true);
     expect(isFilesystemBrowseQuery("notes")).toBe(false);
@@ -59,12 +61,16 @@ describe("projectPaths", () => {
   });
 
   it("detects explicit relative project paths", () => {
+    expect(isExplicitRelativeProjectPath(".")).toBe(true);
+    expect(isExplicitRelativeProjectPath("..")).toBe(true);
     expect(isExplicitRelativeProjectPath("./docs")).toBe(true);
     expect(isExplicitRelativeProjectPath("..\\docs")).toBe(true);
     expect(isExplicitRelativeProjectPath("/repo/docs")).toBe(false);
   });
 
   it("resolves explicit relative paths against the current project", () => {
+    expect(resolveProjectPathForDispatch(".", "/repo/app")).toBe("/repo/app");
+    expect(resolveProjectPathForDispatch("..", "/repo/app")).toBe("/repo");
     expect(resolveProjectPathForDispatch("./docs", "/repo/app")).toBe("/repo/app/docs");
     expect(resolveProjectPathForDispatch("../docs", "/repo/app")).toBe("/repo/docs");
     expect(resolveProjectPathForDispatch("./Repo", "C:\\Work")).toBe("C:\\Work\\Repo");
@@ -75,6 +81,8 @@ describe("projectPaths", () => {
     expect(appendBrowsePathSegment("C:\\Work\\", "Repo")).toBe("C:\\Work\\Repo\\");
     expect(getBrowseParentPath("/repo/src/")).toBe("/repo/");
     expect(getBrowseParentPath("C:\\Work\\Repo\\")).toBe("C:\\Work\\");
+    expect(getBrowseParentPath("\\\\server\\share\\")).toBeNull();
+    expect(getBrowseParentPath("\\\\server\\share\\repo\\")).toBe("\\\\server\\share\\");
     expect(getBrowseParentPath("C:\\")).toBeNull();
   });
 
@@ -91,5 +99,7 @@ describe("projectPaths", () => {
     expect(canNavigateUp("~/repo")).toBe(false);
     expect(canNavigateUp("~/a")).toBe(false);
     expect(canNavigateUp("~/repo/")).toBe(true);
+    expect(canNavigateUp("\\\\server\\share\\")).toBe(false);
+    expect(canNavigateUp("\\\\server\\share\\repo\\")).toBe(true);
   });
 });

@@ -35,6 +35,8 @@ function isUncPath(value: string): boolean {
 
 export function isExplicitRelativeProjectPath(value: string): boolean {
   return (
+    value === "." ||
+    value === ".." ||
     value.startsWith("./") ||
     value.startsWith("../") ||
     value.startsWith(".\\") ||
@@ -87,6 +89,8 @@ export function isFilesystemBrowseQuery(
 ): boolean {
   const allowWindowsPaths = isWindowsPlatform(platform);
   return (
+    value === "." ||
+    value === ".." ||
     value.startsWith("/") ||
     value.startsWith("~/") ||
     value.startsWith("./") ||
@@ -188,8 +192,22 @@ export function getBrowseDirectoryPath(currentPath: string): string {
 }
 
 export function getBrowseParentPath(currentPath: string): string | null {
+  const trimmed = trimTrailingPathSeparators(currentPath);
+  const absolutePath = splitAbsolutePath(trimmed);
+  if (absolutePath) {
+    if (absolutePath.segments.length === 0) {
+      return null;
+    }
+
+    if (absolutePath.segments.length === 1) {
+      return absolutePath.root;
+    }
+
+    const parentSegments = absolutePath.segments.slice(0, -1).join(absolutePath.separator);
+    return `${absolutePath.root}${parentSegments}${absolutePath.separator}`;
+  }
+
   const separator = preferredPathSeparator(currentPath);
-  const trimmed = currentPath.replace(/[\\/]+$/, "");
   const lastSeparatorIndex = Math.max(trimmed.lastIndexOf("/"), trimmed.lastIndexOf("\\"));
 
   if (lastSeparatorIndex < 0) {

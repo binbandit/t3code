@@ -120,6 +120,8 @@ function isWindowsAbsolutePath(value: string): boolean {
 
 function isExplicitRelativePath(value: string): boolean {
   return (
+    value === "." ||
+    value === ".." ||
     value.startsWith("./") ||
     value.startsWith("../") ||
     value.startsWith(".\\") ||

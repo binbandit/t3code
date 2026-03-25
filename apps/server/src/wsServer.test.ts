@@ -1719,6 +1719,49 @@ describe("WebSocket Server", () => {
     });
   });
 
+  it("resolves bare dot and dot-dot filesystem.browse paths against the provided cwd", async () => {
+    const root = makeTempDir("t3code-ws-filesystem-browse-dot-relative-");
+    const workspace = path.join(root, "workspace");
+    fs.mkdirSync(path.join(workspace, "apps"), { recursive: true });
+
+    server = await createTestServer({ cwd: "/test" });
+    const addr = server.address();
+    const port = typeof addr === "object" && addr !== null ? addr.port : 0;
+
+    const [ws] = await connectAndAwaitWelcome(port);
+    connections.push(ws);
+
+    const currentDirResponse = await sendRequest(ws, WS_METHODS.filesystemBrowse, {
+      partialPath: ".",
+      cwd: workspace,
+    });
+    expect(currentDirResponse.error).toBeUndefined();
+    expect(currentDirResponse.result).toEqual({
+      parentPath: root,
+      entries: [
+        {
+          name: "workspace",
+          fullPath: workspace,
+        },
+      ],
+    });
+
+    const parentDirResponse = await sendRequest(ws, WS_METHODS.filesystemBrowse, {
+      partialPath: "..",
+      cwd: path.join(workspace, "apps"),
+    });
+    expect(parentDirResponse.error).toBeUndefined();
+    expect(parentDirResponse.result).toEqual({
+      parentPath: root,
+      entries: [
+        {
+          name: "workspace",
+          fullPath: workspace,
+        },
+      ],
+    });
+  });
+
   it("rejects relative filesystem.browse paths without a cwd", async () => {
     server = await createTestServer({ cwd: "/test" });
     const addr = server.address();

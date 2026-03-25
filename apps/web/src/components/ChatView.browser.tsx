@@ -21,6 +21,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { render } from "vitest-browser-react";
 
 import { useComposerDraftStore } from "../composerDraftStore";
+import { useCommandPaletteStore } from "../commandPaletteStore";
 import {
   INLINE_TERMINAL_CONTEXT_PLACEHOLDER,
   type TerminalContextDraft,
@@ -636,19 +637,6 @@ function dispatchChatNewShortcut(): void {
   );
 }
 
-function dispatchCommandPaletteShortcut(): void {
-  const useMetaForMod = isMacPlatform(navigator.platform);
-  window.dispatchEvent(
-    new KeyboardEvent("keydown", {
-      key: "k",
-      metaKey: useMetaForMod,
-      ctrlKey: !useMetaForMod,
-      bubbles: true,
-      cancelable: true,
-    }),
-  );
-}
-
 async function triggerChatNewShortcutUntilPath(
   router: ReturnType<typeof getRouter>,
   predicate: (pathname: string) => boolean,
@@ -667,16 +655,14 @@ async function triggerChatNewShortcutUntilPath(
   throw new Error(`${errorMessage} Last path: ${pathname}`);
 }
 
-async function triggerCommandPaletteShortcutUntilOpen(): Promise<void> {
-  const deadline = Date.now() + 8_000;
-  while (Date.now() < deadline) {
-    dispatchCommandPaletteShortcut();
-    await waitForLayout();
-    if (document.querySelector('[data-testid="command-palette"]')) {
-      return;
-    }
-  }
-  throw new Error("Command palette should have opened from the shortcut.");
+async function openCommandPaletteFromTrigger(): Promise<void> {
+  const trigger = page.getByTestId("command-palette-trigger");
+  await expect.element(trigger).toBeInTheDocument();
+  await trigger.click();
+  await waitForElement(
+    () => document.querySelector('[data-testid="command-palette"]'),
+    "Command palette should have opened from the sidebar trigger.",
+  );
 }
 
 async function waitForNewThreadShortcutLabel(): Promise<void> {
@@ -687,6 +673,26 @@ async function waitForNewThreadShortcutLabel(): Promise<void> {
     ? "New thread (⇧⌘O)"
     : "New thread (Ctrl+Shift+O)";
   await expect.element(page.getByText(shortcutLabel)).toBeInTheDocument();
+}
+
+async function waitForCommandPaletteShortcutLabel(): Promise<void> {
+  await waitForElement(
+    () => document.querySelector('[data-testid="command-palette-trigger"] kbd'),
+    "Command palette shortcut label did not render.",
+  );
+}
+
+function placeCaretAtEnd(element: HTMLElement): void {
+  const selection = window.getSelection();
+  if (!selection) {
+    return;
+  }
+
+  const range = document.createRange();
+  range.selectNodeContents(element);
+  range.collapse(false);
+  selection.removeAllRanges();
+  selection.addRange(range);
 }
 
 async function waitForImagesToLoad(scope: ParentNode): Promise<void> {
@@ -809,6 +815,7 @@ async function mountChatView(options: {
     cleanup: async () => {
       await screen.unmount();
       host.remove();
+      await waitForLayout();
     },
     measureUserRow: async (targetMessageId: MessageId) => measureUserRow({ host, targetMessageId }),
     setViewport: async (viewport: ViewportSpec) => {
@@ -868,6 +875,9 @@ describe("ChatView timeline estimator parity (full app)", () => {
       projectDraftThreadIdByProjectId: {},
       stickyModel: null,
       stickyModelOptions: {},
+    });
+    useCommandPaletteStore.setState({
+      open: false,
     });
     useStore.setState({
       projects: [],
@@ -1330,6 +1340,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
 
       const composerEditor = await waitForComposerEditor();
       composerEditor.focus();
+      placeCaretAtEnd(composerEditor);
       composerEditor.dispatchEvent(
         new KeyboardEvent("keydown", {
           key: "Backspace",
@@ -1773,7 +1784,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
-  it("opens the command palette from the configurable shortcut and runs a command", async () => {
+  it("renders the configurable shortcut and runs a command from the sidebar trigger", async () => {
     const mounted = await mountChatView({
       viewport: DEFAULT_VIEWPORT,
       snapshot: createSnapshotForTargetUser({
@@ -1806,8 +1817,9 @@ describe("ChatView timeline estimator parity (full app)", () => {
 
     try {
       await waitForServerConfigToApply();
+      await waitForCommandPaletteShortcutLabel();
       const palette = page.getByTestId("command-palette");
-      await triggerCommandPaletteShortcutUntilOpen();
+      await openCommandPaletteFromTrigger();
 
       await expect.element(palette).toBeInTheDocument();
       await expect
@@ -1858,8 +1870,9 @@ describe("ChatView timeline estimator parity (full app)", () => {
 
     try {
       await waitForServerConfigToApply();
+      await waitForCommandPaletteShortcutLabel();
       const palette = page.getByTestId("command-palette");
-      await triggerCommandPaletteShortcutUntilOpen();
+      await openCommandPaletteFromTrigger();
 
       await expect.element(palette).toBeInTheDocument();
       await page.getByPlaceholder("Search commands, projects, and threads...").fill("settings");
@@ -1905,8 +1918,9 @@ describe("ChatView timeline estimator parity (full app)", () => {
 
     try {
       await waitForServerConfigToApply();
+      await waitForCommandPaletteShortcutLabel();
       const palette = page.getByTestId("command-palette");
-      await triggerCommandPaletteShortcutUntilOpen();
+      await openCommandPaletteFromTrigger();
 
       await expect.element(palette).toBeInTheDocument();
       await page.getByPlaceholder("Search commands, projects, and threads...").fill("project");
@@ -1962,8 +1976,9 @@ describe("ChatView timeline estimator parity (full app)", () => {
 
     try {
       await waitForServerConfigToApply();
+      await waitForCommandPaletteShortcutLabel();
       const palette = page.getByTestId("command-palette");
-      await triggerCommandPaletteShortcutUntilOpen();
+      await openCommandPaletteFromTrigger();
 
       await expect.element(palette).toBeInTheDocument();
       await page.getByPlaceholder("Search commands, projects, and threads...").fill("clients/docs");
