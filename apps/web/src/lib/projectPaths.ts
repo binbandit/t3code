@@ -78,7 +78,10 @@ export function isFilesystemBrowseQuery(
 ): boolean {
   const allowWindowsPaths = isWindowsPlatform(platform);
   return (
-    isExplicitRelativePath(value) ||
+    value.startsWith("./") ||
+    value.startsWith("../") ||
+    value.startsWith(".\\") ||
+    value.startsWith("..\\") ||
     value.startsWith("/") ||
     value.startsWith("~/") ||
     (allowWindowsPaths && isWindowsAbsolutePath(value))
