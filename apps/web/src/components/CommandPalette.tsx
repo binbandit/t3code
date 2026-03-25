@@ -1,6 +1,6 @@
 "use client";
 
-import { type FilesystemBrowseResult } from "@t3tools/contracts";
+import { DEFAULT_MODEL_BY_PROVIDER, type FilesystemBrowseResult } from "@t3tools/contracts";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -39,9 +39,14 @@ import {
   isExplicitRelativeProjectPath,
   isFilesystemBrowseQuery,
 } from "../lib/projectPaths";
-import { addProjectFromPath } from "../lib/projectAdd";
+import {
+  findProjectByPath,
+  inferProjectTitleFromPath,
+  isUnsupportedWindowsProjectPath,
+  resolveProjectPathForDispatch,
+} from "../lib/projectPaths";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
-import { cn } from "../lib/utils";
+import { cn, newCommandId, newProjectId } from "../lib/utils";
 import { readNativeApi } from "../nativeApi";
 import { useStore } from "../store";
 import {
@@ -61,7 +66,7 @@ import {
   ITEM_ICON_CLASS,
   RECENT_THREAD_LIMIT,
 } from "./CommandPalette.logic";
-import { sortThreadsForSidebar } from "./Sidebar.logic";
+import { getLatestThreadForProject } from "../lib/threadSort";
 import { CommandPaletteResults } from "./CommandPaletteResults";
 import { Button } from "./ui/button";
 import {
@@ -236,18 +241,23 @@ function OpenCommandPaletteDialog() {
     [handleNewThread, projects],
   );
 
-  const allThreadItems = buildThreadActionItems({
-    threads,
-    ...(activeThread?.id ? { activeThreadId: activeThread.id } : {}),
-    projectTitleById,
-    icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
-    runThread: async (threadId) => {
-      await navigate({
-        to: "/$threadId",
-        params: { threadId },
-      });
-    },
-  });
+  const allThreadItems = useMemo(
+    () =>
+      buildThreadActionItems({
+        threads,
+        ...(activeThread?.id ? { activeThreadId: activeThread.id } : {}),
+        projectTitleById,
+        sortOrder: settings.sidebarThreadSortOrder,
+        icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
+        runThread: async (threadId) => {
+          await navigate({
+            to: "/$threadId",
+            params: { threadId },
+          });
+        },
+      }),
+    [activeThread?.id, navigate, projectTitleById, settings.sidebarThreadSortOrder, threads],
+  );
   const recentThreadItems = allThreadItems.slice(0, RECENT_THREAD_LIMIT);
 
   function pushView(item: CommandPaletteSubmenuItem): void {
@@ -343,7 +353,15 @@ function OpenCommandPaletteDialog() {
     actionItems.push({
       kind: "submenu",
       value: "action:new-local-thread-in",
-      searchTerms: ["new local thread", "project", "pick", "choose", "select", "fresh", "default environment"],
+      searchTerms: [
+        "new local thread",
+        "project",
+        "pick",
+        "choose",
+        "select",
+        "fresh",
+        "default environment",
+      ],
       title: "New local thread in...",
       icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
       addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
@@ -390,29 +408,59 @@ function OpenCommandPaletteDialog() {
       const api = readNativeApi();
       if (!api) return;
 
-      try {
-        await addProjectFromPath(
-          {
-            api,
-            currentProjectCwd,
-            defaultThreadEnvMode: settings.defaultThreadEnvMode,
-            handleNewThread,
-            navigateToThread: async (threadId) => {
-              await navigate({
-                to: "/$threadId",
-                params: { threadId },
-              });
-            },
-            platform: navigator.platform,
-            projects,
-            selectExistingThreadId: (projectId) =>
-              sortThreadsForSidebar(
-                threads.filter((thread) => thread.projectId === projectId),
-                settings.sidebarThreadSortOrder,
-              )[0]?.id ?? null,
-          },
-          rawCwd,
+      if (isUnsupportedWindowsProjectPath(rawCwd.trim(), navigator.platform)) {
+        toastManager.add({
+          type: "error",
+          title: "Failed to add project",
+          description: "Windows-style paths are only supported on Windows.",
+        });
+        return;
+      }
+
+      if (isExplicitRelativeProjectPath(rawCwd.trim()) && !currentProjectCwd) {
+        toastManager.add({
+          type: "error",
+          title: "Failed to add project",
+          description: "Relative paths require an active project.",
+        });
+        return;
+      }
+
+      const cwd = resolveProjectPathForDispatch(rawCwd, currentProjectCwd);
+      if (cwd.length === 0) return;
+
+      const existing = findProjectByPath(projects, cwd);
+      if (existing) {
+        const latestThread = getLatestThreadForProject(
+          threads,
+          existing.id,
+          settings.sidebarThreadSortOrder,
         );
+        if (latestThread) {
+          await navigate({ to: "/$threadId", params: { threadId: latestThread.id } });
+        } else {
+          await handleNewThread(existing.id, {
+            envMode: settings.defaultThreadEnvMode,
+          }).catch(() => undefined);
+        }
+        setOpen(false);
+        return;
+      }
+
+      try {
+        const projectId = newProjectId();
+        await api.orchestration.dispatchCommand({
+          type: "project.create",
+          commandId: newCommandId(),
+          projectId,
+          title: inferProjectTitleFromPath(cwd),
+          workspaceRoot: cwd,
+          defaultModel: DEFAULT_MODEL_BY_PROVIDER.codex,
+          createdAt: new Date().toISOString(),
+        });
+        await handleNewThread(projectId, {
+          envMode: settings.defaultThreadEnvMode,
+        }).catch(() => undefined);
         setOpen(false);
       } catch (error) {
         toastManager.add({
@@ -452,6 +500,14 @@ function OpenCommandPaletteDialog() {
     setBrowseGeneration((generation) => generation + 1);
   }
 
+  // Resolve the add-project path from browse data when available. When the
+  // query has a trailing separator (e.g. "~/projects/foo/"), parentPath is the
+  // directory itself. Otherwise the user typed a partial leaf name, so we need
+  // the exact browse entry's fullPath or fall back to the raw query.
+  const resolvedAddProjectPath = hasTrailingPathSeparator(query)
+    ? (browseResult?.parentPath ?? query.trim())
+    : (exactBrowseEntry?.fullPath ?? query.trim());
+
   const canBrowseUp =
     isBrowsing && !relativePathNeedsActiveProject && canNavigateUp(browseDirectoryPath);
 
@@ -481,11 +537,11 @@ function OpenCommandPaletteDialog() {
     if (
       isBrowsing &&
       event.key === "Enter" &&
-      highlightedItemValue === null &&
+      !highlightedItemValue?.startsWith("browse:") &&
       !relativePathNeedsActiveProject
     ) {
       event.preventDefault();
-      void handleAddProject(query.trim());
+      void handleAddProject(resolvedAddProjectPath);
     }
 
     if (event.key === "Backspace" && query === "" && isSubmenu) {
@@ -520,7 +576,7 @@ function OpenCommandPaletteDialog() {
       data-testid="command-palette"
     >
       <Command
-        key={`${viewStack.length}-${browseGeneration}`}
+        key={`${viewStack.length}-${browseGeneration}-${isBrowsing}`}
         aria-label="Command palette"
         autoHighlight={isBrowsing ? false : "always"}
         mode="none"
@@ -551,7 +607,7 @@ function OpenCommandPaletteDialog() {
                 if (relativePathNeedsActiveProject) {
                   return;
                 }
-                void handleAddProject(query.trim());
+                void handleAddProject(resolvedAddProjectPath);
               }}
             >
               Add

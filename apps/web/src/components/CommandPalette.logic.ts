@@ -1,5 +1,7 @@
 import { type KeybindingCommand, type FilesystemBrowseEntry } from "@t3tools/contracts";
 import { type ReactNode } from "react";
+import type { SidebarThreadSortOrder } from "../appSettings";
+import { sortThreads } from "../lib/threadSort";
 import { formatRelativeTime } from "../relativeTime";
 import { type Project, type Thread } from "../types";
 
@@ -100,32 +102,16 @@ export function buildProjectActionItems(input: {
   }));
 }
 
-function resolveMostRecentThreadTimestamp(thread: Pick<Thread, "createdAt" | "updatedAt">): number {
-  const timestamp = Date.parse(thread.updatedAt ?? thread.createdAt);
-  return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp;
-}
-
-function compareThreadsByMostRecentDesc(
-  left: Pick<Thread, "id" | "createdAt" | "updatedAt">,
-  right: Pick<Thread, "id" | "createdAt" | "updatedAt">,
-): number {
-  const byTimestamp =
-    resolveMostRecentThreadTimestamp(right) - resolveMostRecentThreadTimestamp(left);
-  if (byTimestamp !== 0) {
-    return byTimestamp;
-  }
-  return right.id.localeCompare(left.id);
-}
-
 export function buildThreadActionItems(input: {
   threads: ReadonlyArray<Thread>;
   activeThreadId?: Thread["id"];
   projectTitleById: ReadonlyMap<Project["id"], string>;
+  sortOrder: SidebarThreadSortOrder;
   icon: ReactNode;
   runThread: (threadId: Thread["id"]) => Promise<void>;
   limit?: number;
 }): CommandPaletteActionItem[] {
-  const sortedThreads = input.threads.toSorted(compareThreadsByMostRecentDesc);
+  const sortedThreads = sortThreads(input.threads, input.sortOrder);
   const visibleThreads =
     input.limit === undefined ? sortedThreads : sortedThreads.slice(0, input.limit);
 

@@ -30,6 +30,7 @@ import { SortableContext, useSortable, verticalListSortingStrategy } from "@dnd-
 import { restrictToFirstScrollableAncestor, restrictToVerticalAxis } from "@dnd-kit/modifiers";
 import { CSS } from "@dnd-kit/utilities";
 import {
+  DEFAULT_MODEL_BY_PROVIDER,
   type DesktopUpdateState,
   ProjectId,
   ThreadId,
@@ -45,7 +46,7 @@ import {
 } from "../appSettings";
 import { isElectron } from "../env";
 import { APP_STAGE_LABEL, APP_VERSION } from "../branding";
-import { isLinuxPlatform, isMacPlatform, newCommandId } from "../lib/utils";
+import { isLinuxPlatform, isMacPlatform, newCommandId, newProjectId } from "../lib/utils";
 import { formatRelativeTime } from "../relativeTime";
 import { useStore } from "../store";
 import { shortcutLabelForCommand } from "../keybindings";
@@ -55,7 +56,7 @@ import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { readNativeApi } from "../nativeApi";
 import { useComposerDraftStore } from "../composerDraftStore";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
-import { addProjectFromPath as runAddProjectFromPath } from "../lib/projectAdd";
+import { isNonEmpty as isNonEmptyString } from "effect/String";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
 import { toastManager } from "./ui/toast";
 import { Kbd } from "./ui/kbd";
@@ -100,8 +101,8 @@ import {
   resolveThreadStatusPill,
   shouldClearThreadSelectionOnMouseDown,
   sortProjectsForSidebar,
-  sortThreadsForSidebar,
 } from "./Sidebar.logic";
+import { getLatestThreadForProject, sortThreads } from "../lib/threadSort";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { CommandDialogTrigger } from "./ui/command";
 
@@ -484,14 +485,29 @@ export default function Sidebar() {
     });
   }, []);
 
+  const focusMostRecentThreadForProject = useCallback(
+    (projectId: ProjectId) => {
+      const latestThread = getLatestThreadForProject(
+        threads,
+        projectId,
+        appSettings.sidebarThreadSortOrder,
+      );
+      if (!latestThread) return;
+
+      void navigate({
+        to: "/$threadId",
+        params: { threadId: latestThread.id },
+      });
+    },
+    [appSettings.sidebarThreadSortOrder, navigate, threads],
+  );
+
   const addProjectFromInput = useCallback(
     async (rawCwd: string) => {
+      const cwd = rawCwd.trim();
+      if (!cwd || isAddingProject) return;
       const api = readNativeApi();
-      if (!api || isAddingProject) return;
-      const currentProjectId = activeThread?.projectId ?? activeDraftThread?.projectId ?? null;
-      const currentProjectCwd = currentProjectId
-        ? (projectCwdById.get(currentProjectId) ?? null)
-        : null;
+      if (!api) return;
 
       setIsAddingProject(true);
       const finishAddingProject = () => {
@@ -501,30 +517,28 @@ export default function Sidebar() {
         setAddingProject(false);
       };
 
-      try {
-        await runAddProjectFromPath(
-          {
-            api,
-            currentProjectCwd,
-            defaultThreadEnvMode: appSettings.defaultThreadEnvMode,
-            handleNewThread,
-            navigateToThread: async (threadId) => {
-              await navigate({
-                to: "/$threadId",
-                params: { threadId },
-              });
-            },
-            platform: navigator.platform,
-            projects,
-            selectExistingThreadId: (projectId) =>
-              sortThreadsForSidebar(
-                threads.filter((thread) => thread.projectId === projectId),
-                appSettings.sidebarThreadSortOrder,
-              )[0]?.id ?? null,
-          },
-          rawCwd,
-        );
+      const existing = projects.find((project) => project.cwd === cwd);
+      if (existing) {
+        focusMostRecentThreadForProject(existing.id);
         finishAddingProject();
+        return;
+      }
+
+      const projectId = newProjectId();
+      const title = cwd.split(/[/\\]/).findLast(isNonEmptyString) ?? cwd;
+      try {
+        await api.orchestration.dispatchCommand({
+          type: "project.create",
+          commandId: newCommandId(),
+          projectId,
+          title,
+          workspaceRoot: cwd,
+          defaultModel: DEFAULT_MODEL_BY_PROVIDER.codex,
+          createdAt: new Date().toISOString(),
+        });
+        await handleNewThread(projectId, {
+          envMode: appSettings.defaultThreadEnvMode,
+        }).catch(() => undefined);
       } catch (error) {
         const description =
           error instanceof Error ? error.message : "An error occurred while adding the project.";
@@ -538,20 +552,17 @@ export default function Sidebar() {
         } else {
           setAddProjectError(description);
         }
+        return;
       }
+      finishAddingProject();
     },
     [
-      activeDraftThread,
-      activeThread,
+      focusMostRecentThreadForProject,
       handleNewThread,
       isAddingProject,
-      navigate,
-      projectCwdById,
       projects,
       shouldBrowseForProjectImmediately,
-      threads,
       appSettings.defaultThreadEnvMode,
-      appSettings.sidebarThreadSortOrder,
     ],
   );
 
@@ -1081,7 +1092,7 @@ export default function Sidebar() {
     project: (typeof sortedProjects)[number],
     dragHandleProps: SortableProjectHandleProps | null,
   ) {
-    const projectThreads = sortThreadsForSidebar(
+    const projectThreads = sortThreads(
       threads.filter((thread) => thread.projectId === project.id),
       appSettings.sidebarThreadSortOrder,
     );

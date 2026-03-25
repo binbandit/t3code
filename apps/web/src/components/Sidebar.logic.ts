@@ -1,4 +1,5 @@
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "../appSettings";
+import { getThreadSortTimestamp } from "../lib/threadSort";
 import type { Thread } from "../types";
 import { cn } from "../lib/utils";
 import {
@@ -234,49 +235,6 @@ function toSortableTimestamp(iso: string | undefined): number | null {
   if (!iso) return null;
   const ms = Date.parse(iso);
   return Number.isFinite(ms) ? ms : null;
-}
-
-function getLatestUserMessageTimestamp(thread: SidebarThreadSortInput): number {
-  let latestUserMessageTimestamp: number | null = null;
-
-  for (const message of thread.messages) {
-    if (message.role !== "user") continue;
-    const messageTimestamp = toSortableTimestamp(message.createdAt);
-    if (messageTimestamp === null) continue;
-    latestUserMessageTimestamp =
-      latestUserMessageTimestamp === null
-        ? messageTimestamp
-        : Math.max(latestUserMessageTimestamp, messageTimestamp);
-  }
-
-  if (latestUserMessageTimestamp !== null) {
-    return latestUserMessageTimestamp;
-  }
-
-  return toSortableTimestamp(thread.updatedAt ?? thread.createdAt) ?? Number.NEGATIVE_INFINITY;
-}
-
-function getThreadSortTimestamp(
-  thread: SidebarThreadSortInput,
-  sortOrder: SidebarThreadSortOrder | Exclude<SidebarProjectSortOrder, "manual">,
-): number {
-  if (sortOrder === "created_at") {
-    return toSortableTimestamp(thread.createdAt) ?? Number.NEGATIVE_INFINITY;
-  }
-  return getLatestUserMessageTimestamp(thread);
-}
-
-export function sortThreadsForSidebar<
-  T extends Pick<Thread, "id" | "createdAt" | "updatedAt" | "messages">,
->(threads: readonly T[], sortOrder: SidebarThreadSortOrder): T[] {
-  return threads.toSorted((left, right) => {
-    const rightTimestamp = getThreadSortTimestamp(right, sortOrder);
-    const leftTimestamp = getThreadSortTimestamp(left, sortOrder);
-    const byTimestamp =
-      rightTimestamp === leftTimestamp ? 0 : rightTimestamp > leftTimestamp ? 1 : -1;
-    if (byTimestamp !== 0) return byTimestamp;
-    return right.id.localeCompare(left.id);
-  });
 }
 
 export function getProjectSortTimestamp(

@@ -60,6 +60,7 @@ describe("buildThreadActionItems", () => {
       const items = buildThreadActionItems({
         threads,
         projectTitleById: new Map([[projectId, "Project"]]),
+        sortOrder: "updated_at",
         icon: null,
         runThread: async (_threadId) => undefined,
       });
@@ -121,6 +122,7 @@ describe("buildThreadActionItems", () => {
         },
       ] satisfies Thread[],
       projectTitleById: new Map([[projectId, "Project"]]),
+      sortOrder: "updated_at",
       icon: null,
       runThread: async (_threadId) => undefined,
     });
