@@ -15,6 +15,7 @@ export interface CommandPaletteItem {
   readonly title: ReactNode;
   readonly description?: string;
   readonly searchText?: string;
+  readonly searchFields?: ReadonlyArray<string>;
   readonly timestamp?: string;
   readonly icon: ReactNode;
   readonly shortcutCommand?: KeybindingCommand;
@@ -63,6 +64,7 @@ export function buildProjectActionItems(input: {
     label: `${project.name} ${project.cwd}`.trim(),
     title: project.name,
     description: project.cwd,
+    searchFields: [project.name, project.cwd],
     icon: input.icon,
     run: async () => {
       await input.runProject(project.id);
@@ -96,12 +98,16 @@ export function buildThreadActionItems(input: {
       descriptionParts.push("Current thread");
     }
 
+    const searchText = `${thread.title} ${projectTitle ?? ""} ${thread.branch ?? ""}`.trim();
+
     return {
       kind: "action",
       value: `thread:${thread.id}`,
-      label: `${thread.title} ${projectTitle ?? ""} ${thread.branch ?? ""}`.trim(),
+      label: searchText,
       title: thread.title,
       description: descriptionParts.join(" · "),
+      searchText,
+      searchFields: [thread.title, projectTitle ?? "", thread.branch ?? ""],
       timestamp: formatRelativeTime(thread.updatedAt ?? thread.createdAt, Date.now(), "short"),
       icon: input.icon,
       run: async () => {
@@ -109,6 +115,39 @@ export function buildThreadActionItems(input: {
       },
     };
   });
+}
+
+function rankSearchFieldMatch(field: string, normalizedQuery: string): number {
+  const normalizedField = normalizeSearchText(field);
+  if (normalizedField.length === 0 || !normalizedField.includes(normalizedQuery)) {
+    return Number.NEGATIVE_INFINITY;
+  }
+  if (normalizedField === normalizedQuery) {
+    return 3;
+  }
+  if (normalizedField.startsWith(normalizedQuery)) {
+    return 2;
+  }
+  return 1;
+}
+
+function rankCommandPaletteItemMatch(
+  item: CommandPaletteActionItem | CommandPaletteSubmenuItem,
+  normalizedQuery: string,
+): number {
+  const searchFields = item.searchFields?.filter((field) => field.length > 0) ?? [];
+  if (searchFields.length === 0) {
+    return 0;
+  }
+
+  for (const [index, field] of searchFields.entries()) {
+    const fieldRank = rankSearchFieldMatch(field, normalizedQuery);
+    if (fieldRank !== Number.NEGATIVE_INFINITY) {
+      return 1_000 - index * 100 + fieldRank;
+    }
+  }
+
+  return 0;
 }
 
 export function filterCommandPaletteGroups(input: {
@@ -155,12 +194,27 @@ export function filterCommandPaletteGroups(input: {
   }
 
   return searchableGroups.flatMap((group) => {
-    const items = group.items.filter((item) => {
-      const haystack = normalizeSearchText(
-        [item.searchText ?? item.label, item.searchText ? "" : (item.description ?? "")].join(" "),
-      );
-      return haystack.includes(normalizedQuery);
-    });
+    const items = group.items
+      .map((item, index) => {
+        const haystack = normalizeSearchText(
+          item.searchText ?? [item.label, item.description].filter(Boolean).join(" "),
+        );
+        if (!haystack.includes(normalizedQuery)) {
+          return null;
+        }
+
+        return {
+          item,
+          index,
+          rank: rankCommandPaletteItemMatch(item, normalizedQuery),
+        };
+      })
+      .filter(
+        (entry): entry is { item: (typeof group.items)[number]; index: number; rank: number } =>
+          entry !== null,
+      )
+      .toSorted((left, right) => right.rank - left.rank || left.index - right.index)
+      .map((entry) => entry.item);
 
     if (items.length === 0) {
       return [];

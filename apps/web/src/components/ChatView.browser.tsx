@@ -416,6 +416,36 @@ function createSnapshotWithSecondaryProject(): OrchestrationReadModel {
         deletedAt: null,
       },
     ],
+    threads: [
+      ...snapshot.threads,
+      {
+        id: "thread-secondary-project" as ThreadId,
+        projectId: SECOND_PROJECT_ID,
+        title: "Release checklist",
+        model: "gpt-5",
+        interactionMode: "default",
+        runtimeMode: "full-access",
+        branch: "release/docs-portal",
+        worktreePath: null,
+        latestTurn: null,
+        createdAt: isoAt(30),
+        updatedAt: isoAt(31),
+        deletedAt: null,
+        messages: [],
+        activities: [],
+        proposedPlans: [],
+        checkpoints: [],
+        session: {
+          threadId: "thread-secondary-project" as ThreadId,
+          status: "ready",
+          providerName: "codex",
+          runtimeMode: "full-access",
+          activeTurnId: null,
+          lastError: null,
+          updatedAt: isoAt(31),
+        },
+      },
+    ],
   };
 }
 
@@ -1885,13 +1915,10 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
-  it("does not match thread actions from contextual project names", async () => {
+  it("keeps project-context thread matches available when searching by project name", async () => {
     const mounted = await mountChatView({
       viewport: DEFAULT_VIEWPORT,
-      snapshot: createSnapshotForTargetUser({
-        targetMessageId: "msg-user-command-palette-project-query-test" as MessageId,
-        targetText: "command palette project query test",
-      }),
+      snapshot: createSnapshotWithSecondaryProject(),
       configureFixture: (nextFixture) => {
         nextFixture.serverConfig = {
           ...nextFixture.serverConfig,
@@ -1923,11 +1950,11 @@ describe("ChatView timeline estimator parity (full app)", () => {
       await openCommandPaletteFromTrigger();
 
       await expect.element(palette).toBeInTheDocument();
-      await page.getByPlaceholder("Search commands, projects, and threads...").fill("project");
-      await expect.element(palette.getByText("Project", { exact: true })).toBeInTheDocument();
+      await page.getByPlaceholder("Search commands, projects, and threads...").fill("docs");
+      await expect.element(palette.getByText("Docs Portal", { exact: true })).toBeInTheDocument();
       await expect
-        .element(palette.getByText("New thread in Project", { exact: true }))
-        .not.toBeInTheDocument();
+        .element(palette.getByText("Release checklist", { exact: true }))
+        .toBeInTheDocument();
     } finally {
       await mounted.cleanup();
     }
