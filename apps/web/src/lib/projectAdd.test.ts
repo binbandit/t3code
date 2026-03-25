@@ -3,8 +3,9 @@ import { ProjectId, ThreadId, type NativeApi } from "@t3tools/contracts";
 import { addProjectFromPath } from "./projectAdd";
 
 describe("addProjectFromPath", () => {
-  it("navigates to the most recently updated existing project thread", async () => {
+  it("navigates to the selected existing project thread", async () => {
     const projectId = ProjectId.makeUnsafe("project-1");
+    const selectedThreadId = ThreadId.makeUnsafe("thread-selected");
     const navigateToThread = vi.fn(async (_threadId: ThreadId) => undefined);
 
     await addProjectFromPath(
@@ -20,25 +21,12 @@ describe("addProjectFromPath", () => {
         navigateToThread,
         platform: "MacIntel",
         projects: [{ id: projectId, cwd: "/repo/project" }],
-        threads: [
-          {
-            id: ThreadId.makeUnsafe("thread-older"),
-            projectId,
-            createdAt: "2026-03-01T00:00:00.000Z",
-            updatedAt: "2026-03-24T12:00:00.000Z",
-          },
-          {
-            id: ThreadId.makeUnsafe("thread-newer"),
-            projectId,
-            createdAt: "2026-03-20T00:00:00.000Z",
-            updatedAt: "2026-03-20T00:00:00.000Z",
-          },
-        ],
+        selectExistingThreadId: vi.fn(() => selectedThreadId),
       },
       "/repo/project",
     );
 
-    expect(navigateToThread).toHaveBeenCalledWith("thread-older");
+    expect(navigateToThread).toHaveBeenCalledWith(selectedThreadId);
   });
 
   it("swallows thread creation failures after successfully creating a project", async () => {
@@ -61,7 +49,6 @@ describe("addProjectFromPath", () => {
           navigateToThread: vi.fn(async (_threadId: ThreadId) => undefined),
           platform: "MacIntel",
           projects: [],
-          threads: [],
         },
         "/repo/new-project",
       ),

@@ -516,7 +516,11 @@ export default function Sidebar() {
             },
             platform: navigator.platform,
             projects,
-            threads,
+            selectExistingThreadId: (projectId) =>
+              sortThreadsForSidebar(
+                threads.filter((thread) => thread.projectId === projectId),
+                appSettings.sidebarThreadSortOrder,
+              )[0]?.id ?? null,
           },
           rawCwd,
         );
@@ -547,6 +551,7 @@ export default function Sidebar() {
       shouldBrowseForProjectImmediately,
       threads,
       appSettings.defaultThreadEnvMode,
+      appSettings.sidebarThreadSortOrder,
     ],
   );
 
@@ -1489,16 +1494,10 @@ export default function Sidebar() {
         : shouldHighlightDesktopUpdateError(desktopUpdateState)
           ? "text-rose-500 animate-pulse"
           : "text-amber-500 animate-pulse";
-  const newThreadShortcutLabel = useMemo(
-    () =>
-      shortcutLabelForCommand(keybindings, "chat.newLocal") ??
-      shortcutLabelForCommand(keybindings, "chat.new"),
-    [keybindings],
-  );
-  const commandPaletteShortcutLabel = useMemo(
-    () => shortcutLabelForCommand(keybindings, "commandPalette.toggle"),
-    [keybindings],
-  );
+  const newThreadShortcutLabel =
+    shortcutLabelForCommand(keybindings, "chat.newLocal") ??
+    shortcutLabelForCommand(keybindings, "chat.new");
+  const commandPaletteShortcutLabel = shortcutLabelForCommand(keybindings, "commandPalette.toggle");
 
   const handleDesktopUpdateButtonClick = useCallback(() => {
     const bridge = window.desktopBridge;

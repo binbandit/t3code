@@ -10,7 +10,6 @@ import {
   formatShortcutLabel,
   isChatNewShortcut,
   isChatNewLocalShortcut,
-  isCommandPaletteToggleShortcut,
   isDiffToggleShortcut,
   isOpenFavoriteEditorShortcut,
   isTerminalClearShortcut,
@@ -295,17 +294,19 @@ describe("chat/editor shortcuts", () => {
   });
 
   it("matches commandPalette.toggle shortcut outside terminal focus", () => {
-    assert.isTrue(
-      isCommandPaletteToggleShortcut(event({ key: "k", metaKey: true }), DEFAULT_BINDINGS, {
+    assert.strictEqual(
+      resolveShortcutCommand(event({ key: "k", metaKey: true }), DEFAULT_BINDINGS, {
         platform: "MacIntel",
         context: { terminalFocus: false },
       }),
+      "commandPalette.toggle",
     );
-    assert.isFalse(
-      isCommandPaletteToggleShortcut(event({ key: "k", metaKey: true }), DEFAULT_BINDINGS, {
+    assert.notStrictEqual(
+      resolveShortcutCommand(event({ key: "k", metaKey: true }), DEFAULT_BINDINGS, {
         platform: "MacIntel",
         context: { terminalFocus: true },
       }),
+      "commandPalette.toggle",
     );
   });
 

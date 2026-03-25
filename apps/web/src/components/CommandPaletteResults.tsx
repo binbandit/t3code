@@ -76,7 +76,6 @@ function CommandPaletteResultRow(props: {
         props.onExecuteItem(props.item);
       }}
     >
-      {props.item.searchText ? <span className="sr-only">{props.item.searchText}</span> : null}
       {props.item.icon}
       {props.item.description ? (
         <span className="flex min-w-0 flex-1 flex-col">

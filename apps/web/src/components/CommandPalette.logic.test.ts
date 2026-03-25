@@ -68,8 +68,8 @@ describe("buildThreadActionItems", () => {
         "thread:thread-older",
         "thread:thread-newer",
       ]);
-      expect(items[0]?.timestamp).toBe("1d ago");
-      expect(items[1]?.timestamp).toBe("5d ago");
+      expect(items[0]?.timestamp).toBe("yesterday");
+      expect(items[1]?.timestamp).toBe("5 days ago");
     } finally {
       vi.useRealTimers();
     }
@@ -149,11 +149,9 @@ describe("buildThreadActionItems", () => {
         {
           kind: "action",
           value: "thread:project-context-only",
-          label: "Fix navbar spacing Project",
+          searchTerms: ["Fix navbar spacing", "Project"],
           title: "Fix navbar spacing",
           description: "Project",
-          searchText: "Fix navbar spacing Project",
-          searchFields: ["Fix navbar spacing", "Project"],
           icon: null,
           run: async () => undefined,
         },

@@ -19,13 +19,6 @@ interface ProjectLike {
   readonly cwd: string;
 }
 
-interface ThreadLike {
-  readonly id: ThreadId;
-  readonly projectId: ProjectId;
-  readonly createdAt: string;
-  readonly updatedAt?: string | undefined;
-}
-
 interface AddProjectFromPathContext {
   readonly api: NativeApi;
   readonly currentProjectCwd?: string | null;
@@ -37,30 +30,10 @@ interface AddProjectFromPathContext {
   readonly navigateToThread: (threadId: ThreadId) => Promise<void>;
   readonly platform: string;
   readonly projects: ReadonlyArray<ProjectLike>;
-  readonly threads: ReadonlyArray<ThreadLike>;
+  readonly selectExistingThreadId?: (projectId: ProjectId) => ThreadId | null;
 }
 
 export type AddProjectFromPathResult = "created" | "existing" | "noop";
-
-function resolveMostRecentThreadTimestamp(thread: {
-  createdAt: string;
-  updatedAt?: string | undefined;
-}): number {
-  const timestamp = Date.parse(thread.updatedAt ?? thread.createdAt);
-  return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp;
-}
-
-export function compareThreadsByMostRecentDesc(
-  left: { id: string; createdAt: string; updatedAt?: string | undefined },
-  right: { id: string; createdAt: string; updatedAt?: string | undefined },
-): number {
-  const byTimestamp =
-    resolveMostRecentThreadTimestamp(right) - resolveMostRecentThreadTimestamp(left);
-  if (byTimestamp !== 0) {
-    return byTimestamp;
-  }
-  return right.id.localeCompare(left.id);
-}
 
 export async function addProjectFromPath(
   context: AddProjectFromPathContext,
@@ -81,11 +54,9 @@ export async function addProjectFromPath(
 
   const existing = findProjectByPath(context.projects, cwd);
   if (existing) {
-    const latestThread = context.threads
-      .filter((thread) => thread.projectId === existing.id)
-      .toSorted(compareThreadsByMostRecentDesc)[0];
-    if (latestThread) {
-      await context.navigateToThread(latestThread.id);
+    const threadId = context.selectExistingThreadId?.(existing.id) ?? null;
+    if (threadId) {
+      await context.navigateToThread(threadId);
     }
     return "existing";
   }

@@ -1,6 +1,5 @@
 import { type KeybindingCommand, type FilesystemBrowseEntry } from "@t3tools/contracts";
 import { type ReactNode } from "react";
-import { compareThreadsByMostRecentDesc } from "../lib/projectAdd";
 import { formatRelativeTime } from "../relativeTime";
 import { type Project, type Thread } from "../types";
 
@@ -11,11 +10,9 @@ export const ADDON_ICON_CLASS = "size-4";
 export interface CommandPaletteItem {
   readonly kind: "action" | "submenu";
   readonly value: string;
-  readonly label: string;
+  readonly searchTerms: ReadonlyArray<string>;
   readonly title: ReactNode;
   readonly description?: string;
-  readonly searchText?: string;
-  readonly searchFields?: ReadonlyArray<string>;
   readonly timestamp?: string;
   readonly icon: ReactNode;
   readonly shortcutCommand?: KeybindingCommand;
@@ -48,6 +45,38 @@ export interface CommandPaletteView {
 
 export type CommandPaletteMode = "root" | "root-browse" | "submenu" | "submenu-browse";
 
+export function filterBrowseEntries(input: {
+  browseEntries: ReadonlyArray<FilesystemBrowseEntry>;
+  browseFilterQuery: string;
+  highlightedItemValue: string | null;
+}): {
+  filteredEntries: FilesystemBrowseEntry[];
+  highlightedEntry: FilesystemBrowseEntry | null;
+  exactEntry: FilesystemBrowseEntry | null;
+} {
+  const lowerFilter = input.browseFilterQuery.toLowerCase();
+  const showHidden = input.browseFilterQuery.startsWith(".");
+
+  const filteredEntries = input.browseEntries.filter(
+    (entry) =>
+      entry.name.toLowerCase().startsWith(lowerFilter) &&
+      (showHidden || !entry.name.startsWith(".")),
+  );
+
+  let highlightedEntry: FilesystemBrowseEntry | null = null;
+  if (input.highlightedItemValue?.startsWith("browse:")) {
+    const highlightedPath = input.highlightedItemValue.slice("browse:".length);
+    highlightedEntry = filteredEntries.find((entry) => entry.fullPath === highlightedPath) ?? null;
+  }
+
+  const exactEntry =
+    input.browseFilterQuery.length > 0
+      ? (filteredEntries.find((entry) => entry.name === input.browseFilterQuery) ?? null)
+      : null;
+
+  return { filteredEntries, highlightedEntry, exactEntry };
+}
+
 export function normalizeSearchText(value: string): string {
   return value.trim().toLowerCase().replace(/\s+/g, " ");
 }
@@ -61,15 +90,31 @@ export function buildProjectActionItems(input: {
   return input.projects.map((project) => ({
     kind: "action",
     value: `${input.valuePrefix}:${project.id}`,
-    label: `${project.name} ${project.cwd}`.trim(),
+    searchTerms: [project.name, project.cwd],
     title: project.name,
     description: project.cwd,
-    searchFields: [project.name, project.cwd],
     icon: input.icon,
     run: async () => {
       await input.runProject(project.id);
     },
   }));
+}
+
+function resolveMostRecentThreadTimestamp(thread: Pick<Thread, "createdAt" | "updatedAt">): number {
+  const timestamp = Date.parse(thread.updatedAt ?? thread.createdAt);
+  return Number.isNaN(timestamp) ? Number.NEGATIVE_INFINITY : timestamp;
+}
+
+function compareThreadsByMostRecentDesc(
+  left: Pick<Thread, "id" | "createdAt" | "updatedAt">,
+  right: Pick<Thread, "id" | "createdAt" | "updatedAt">,
+): number {
+  const byTimestamp =
+    resolveMostRecentThreadTimestamp(right) - resolveMostRecentThreadTimestamp(left);
+  if (byTimestamp !== 0) {
+    return byTimestamp;
+  }
+  return right.id.localeCompare(left.id);
 }
 
 export function buildThreadActionItems(input: {
@@ -98,17 +143,13 @@ export function buildThreadActionItems(input: {
       descriptionParts.push("Current thread");
     }
 
-    const searchText = `${thread.title} ${projectTitle ?? ""} ${thread.branch ?? ""}`.trim();
-
     return {
       kind: "action",
       value: `thread:${thread.id}`,
-      label: searchText,
+      searchTerms: [thread.title, projectTitle ?? "", thread.branch ?? ""],
       title: thread.title,
       description: descriptionParts.join(" · "),
-      searchText,
-      searchFields: [thread.title, projectTitle ?? "", thread.branch ?? ""],
-      timestamp: formatRelativeTime(thread.updatedAt ?? thread.createdAt, Date.now(), "short"),
+      timestamp: formatRelativeTime(thread.updatedAt ?? thread.createdAt, Date.now(), "long"),
       icon: input.icon,
       run: async () => {
         await input.runThread(thread.id);
@@ -135,12 +176,12 @@ function rankCommandPaletteItemMatch(
   item: CommandPaletteActionItem | CommandPaletteSubmenuItem,
   normalizedQuery: string,
 ): number {
-  const searchFields = item.searchFields?.filter((field) => field.length > 0) ?? [];
-  if (searchFields.length === 0) {
+  const terms = item.searchTerms.filter((term) => term.length > 0);
+  if (terms.length === 0) {
     return 0;
   }
 
-  for (const [index, field] of searchFields.entries()) {
+  for (const [index, field] of terms.entries()) {
     const fieldRank = rankSearchFieldMatch(field, normalizedQuery);
     if (fieldRank !== Number.NEGATIVE_INFINITY) {
       return 1_000 - index * 100 + fieldRank;
@@ -196,9 +237,7 @@ export function filterCommandPaletteGroups(input: {
   return searchableGroups.flatMap((group) => {
     const items = group.items
       .map((item, index) => {
-        const haystack = normalizeSearchText(
-          item.searchText ?? [item.label, item.description].filter(Boolean).join(" "),
-        );
+        const haystack = normalizeSearchText(item.searchTerms.join(" "));
         if (!haystack.includes(normalizedQuery)) {
           return null;
         }
@@ -239,8 +278,7 @@ export function buildBrowseGroups(input: {
     items.push({
       kind: "action",
       value: "browse:up",
-      label: `${input.browseQuery} ..`,
-      searchText: `${input.browseQuery} ..`,
+      searchTerms: [input.browseQuery, ".."],
       title: "..",
       icon: input.upIcon,
       keepOpen: true,
@@ -254,8 +292,7 @@ export function buildBrowseGroups(input: {
     items.push({
       kind: "action",
       value: `browse:${entry.fullPath}`,
-      label: `${input.browseQuery} ${entry.fullPath} ${entry.name}`,
-      searchText: `${input.browseQuery} ${entry.fullPath} ${entry.name}`,
+      searchTerms: [input.browseQuery, entry.fullPath, entry.name],
       title: entry.name,
       icon: input.directoryIcon,
       keepOpen: true,
@@ -276,6 +313,24 @@ export function getCommandPaletteMode(input: {
     return input.isBrowsing ? "submenu-browse" : "submenu";
   }
   return input.isBrowsing ? "root-browse" : "root";
+}
+
+export function buildRootGroups(input: {
+  actionItems: ReadonlyArray<CommandPaletteActionItem | CommandPaletteSubmenuItem>;
+  recentThreadItems: ReadonlyArray<CommandPaletteActionItem>;
+}): CommandPaletteGroup[] {
+  const groups: CommandPaletteGroup[] = [];
+  if (input.actionItems.length > 0) {
+    groups.push({ value: "actions", label: "Actions", items: input.actionItems });
+  }
+  if (input.recentThreadItems.length > 0) {
+    groups.push({
+      value: "recent-threads",
+      label: "Recent Threads",
+      items: input.recentThreadItems,
+    });
+  }
+  return groups;
 }
 
 export function getCommandPaletteInputPlaceholder(mode: CommandPaletteMode): string {
