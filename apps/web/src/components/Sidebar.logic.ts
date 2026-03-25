@@ -1,5 +1,5 @@
-import type { SidebarProjectSortOrder } from "../appSettings";
-import { getThreadSortTimestamp } from "../lib/threadSort";
+import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "../appSettings";
+import { getThreadSortTimestamp, sortThreads } from "../lib/threadSort";
 import type { Thread } from "../types";
 import { cn } from "../lib/utils";
 import {
@@ -237,6 +237,38 @@ function toSortableTimestamp(iso: string | undefined): number | null {
   return Number.isFinite(ms) ? ms : null;
 }
 
+export function sortThreadsForSidebar<
+  T extends Pick<Thread, "id" | "createdAt" | "updatedAt" | "messages">,
+>(threads: readonly T[], sortOrder: SidebarThreadSortOrder): T[] {
+  return sortThreads(threads, sortOrder);
+}
+
+export function getFallbackThreadIdAfterDelete<
+  T extends Pick<Thread, "id" | "projectId" | "createdAt" | "updatedAt" | "messages">,
+>(input: {
+  threads: readonly T[];
+  deletedThreadId: T["id"];
+  sortOrder: SidebarThreadSortOrder;
+  deletedThreadIds?: ReadonlySet<T["id"]>;
+}): T["id"] | null {
+  const { deletedThreadId, deletedThreadIds, sortOrder, threads } = input;
+  const deletedThread = threads.find((thread) => thread.id === deletedThreadId);
+  if (!deletedThread) {
+    return null;
+  }
+
+  return (
+    sortThreadsForSidebar(
+      threads.filter(
+        (thread) =>
+          thread.projectId === deletedThread.projectId &&
+          thread.id !== deletedThreadId &&
+          !deletedThreadIds?.has(thread.id),
+      ),
+      sortOrder,
+    )[0]?.id ?? null
+  );
+}
 export function getProjectSortTimestamp(
   project: SidebarProject,
   projectThreads: readonly SidebarThreadSortInput[],

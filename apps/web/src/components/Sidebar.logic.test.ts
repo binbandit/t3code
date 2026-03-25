@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  getFallbackThreadIdAfterDelete,
   getVisibleThreadsForProject,
   getProjectSortTimestamp,
   hasUnseenCompletion,
@@ -10,6 +11,7 @@ import {
   resolveThreadStatusPill,
   shouldClearThreadSelectionOnMouseDown,
   sortProjectsForSidebar,
+  sortThreadsForSidebar,
 } from "./Sidebar.logic";
 import { ProjectId, ThreadId } from "@t3tools/contracts";
 import {
@@ -388,6 +390,202 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
   };
 }
 
+describe("sortThreadsForSidebar", () => {
+  it("sorts threads by the latest user message in recency mode", () => {
+    const sorted = sortThreadsForSidebar(
+      [
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-1"),
+          createdAt: "2026-03-09T10:00:00.000Z",
+          updatedAt: "2026-03-09T10:10:00.000Z",
+          messages: [
+            {
+              id: "message-1" as never,
+              role: "user",
+              text: "older",
+              createdAt: "2026-03-09T10:01:00.000Z",
+              streaming: false,
+              completedAt: "2026-03-09T10:01:00.000Z",
+            },
+          ],
+        }),
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-2"),
+          createdAt: "2026-03-09T10:05:00.000Z",
+          updatedAt: "2026-03-09T10:05:00.000Z",
+          messages: [
+            {
+              id: "message-2" as never,
+              role: "user",
+              text: "newer",
+              createdAt: "2026-03-09T10:06:00.000Z",
+              streaming: false,
+              completedAt: "2026-03-09T10:06:00.000Z",
+            },
+          ],
+        }),
+      ],
+      "updated_at",
+    );
+
+    expect(sorted.map((thread) => thread.id)).toEqual([
+      ThreadId.makeUnsafe("thread-2"),
+      ThreadId.makeUnsafe("thread-1"),
+    ]);
+  });
+
+  it("falls back to thread timestamps when there is no user message", () => {
+    const sorted = sortThreadsForSidebar(
+      [
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-1"),
+          createdAt: "2026-03-09T10:00:00.000Z",
+          updatedAt: "2026-03-09T10:01:00.000Z",
+          messages: [
+            {
+              id: "message-1" as never,
+              role: "assistant",
+              text: "assistant only",
+              createdAt: "2026-03-09T10:02:00.000Z",
+              streaming: false,
+              completedAt: "2026-03-09T10:02:00.000Z",
+            },
+          ],
+        }),
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-2"),
+          createdAt: "2026-03-09T10:05:00.000Z",
+          updatedAt: "2026-03-09T10:05:00.000Z",
+          messages: [],
+        }),
+      ],
+      "updated_at",
+    );
+
+    expect(sorted.map((thread) => thread.id)).toEqual([
+      ThreadId.makeUnsafe("thread-2"),
+      ThreadId.makeUnsafe("thread-1"),
+    ]);
+  });
+
+  it("falls back to id ordering when threads have no sortable timestamps", () => {
+    const sorted = sortThreadsForSidebar(
+      [
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-1"),
+          createdAt: "" as never,
+          updatedAt: undefined,
+          messages: [],
+        }),
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-2"),
+          createdAt: "" as never,
+          updatedAt: undefined,
+          messages: [],
+        }),
+      ],
+      "updated_at",
+    );
+
+    expect(sorted.map((thread) => thread.id)).toEqual([
+      ThreadId.makeUnsafe("thread-2"),
+      ThreadId.makeUnsafe("thread-1"),
+    ]);
+  });
+
+  it("can sort threads by createdAt when configured", () => {
+    const sorted = sortThreadsForSidebar(
+      [
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-1"),
+          createdAt: "2026-03-09T10:05:00.000Z",
+          updatedAt: "2026-03-09T10:05:00.000Z",
+        }),
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-2"),
+          createdAt: "2026-03-09T10:00:00.000Z",
+          updatedAt: "2026-03-09T10:10:00.000Z",
+        }),
+      ],
+      "created_at",
+    );
+
+    expect(sorted.map((thread) => thread.id)).toEqual([
+      ThreadId.makeUnsafe("thread-1"),
+      ThreadId.makeUnsafe("thread-2"),
+    ]);
+  });
+});
+
+describe("getFallbackThreadIdAfterDelete", () => {
+  it("returns the top remaining thread in the deleted thread's project sidebar order", () => {
+    const fallbackThreadId = getFallbackThreadIdAfterDelete({
+      threads: [
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-oldest"),
+          projectId: ProjectId.makeUnsafe("project-1"),
+          createdAt: "2026-03-09T10:00:00.000Z",
+          messages: [],
+        }),
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-active"),
+          projectId: ProjectId.makeUnsafe("project-1"),
+          createdAt: "2026-03-09T10:05:00.000Z",
+          messages: [],
+        }),
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-newest"),
+          projectId: ProjectId.makeUnsafe("project-1"),
+          createdAt: "2026-03-09T10:10:00.000Z",
+          messages: [],
+        }),
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-other-project"),
+          projectId: ProjectId.makeUnsafe("project-2"),
+          createdAt: "2026-03-09T10:20:00.000Z",
+          messages: [],
+        }),
+      ],
+      deletedThreadId: ThreadId.makeUnsafe("thread-active"),
+      sortOrder: "created_at",
+    });
+
+    expect(fallbackThreadId).toBe(ThreadId.makeUnsafe("thread-newest"));
+  });
+
+  it("skips other threads being deleted in the same action", () => {
+    const fallbackThreadId = getFallbackThreadIdAfterDelete({
+      threads: [
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-active"),
+          projectId: ProjectId.makeUnsafe("project-1"),
+          createdAt: "2026-03-09T10:05:00.000Z",
+          messages: [],
+        }),
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-newest"),
+          projectId: ProjectId.makeUnsafe("project-1"),
+          createdAt: "2026-03-09T10:10:00.000Z",
+          messages: [],
+        }),
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-next"),
+          projectId: ProjectId.makeUnsafe("project-1"),
+          createdAt: "2026-03-09T10:07:00.000Z",
+          messages: [],
+        }),
+      ],
+      deletedThreadId: ThreadId.makeUnsafe("thread-active"),
+      deletedThreadIds: new Set([
+        ThreadId.makeUnsafe("thread-active"),
+        ThreadId.makeUnsafe("thread-newest"),
+      ]),
+      sortOrder: "created_at",
+    });
+
+    expect(fallbackThreadId).toBe(ThreadId.makeUnsafe("thread-next"));
+  });
+});
 describe("sortProjectsForSidebar", () => {
   it("sorts projects by the most recent user message across their threads", () => {
     const projects = [
