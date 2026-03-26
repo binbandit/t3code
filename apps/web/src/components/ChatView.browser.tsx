@@ -2061,25 +2061,16 @@ describe("ChatView timeline estimator parity (full app)", () => {
   });
 
   it("searches projects by path and opens a new thread using the default env mode", async () => {
-    localStorage.setItem(
-      "t3code:app-settings:v1",
-      JSON.stringify({
-        codexBinaryPath: "",
-        codexHomePath: "",
-        defaultThreadEnvMode: "worktree",
-        confirmThreadDelete: true,
-        enableAssistantStreaming: false,
-        timestampFormat: "locale",
-        customCodexModels: [],
-      }),
-    );
-
     const mounted = await mountChatView({
       viewport: DEFAULT_VIEWPORT,
       snapshot: createSnapshotWithSecondaryProject(),
       configureFixture: (nextFixture) => {
         nextFixture.serverConfig = {
           ...nextFixture.serverConfig,
+          settings: {
+            ...nextFixture.serverConfig.settings,
+            defaultThreadEnvMode: "worktree",
+          },
           keybindings: [
             {
               command: "commandPalette.toggle",
