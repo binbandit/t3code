@@ -18,9 +18,9 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
-import { useAppSettings } from "../appSettings";
 import { useCommandPaletteStore } from "../commandPaletteStore";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import { useSettings } from "../hooks/useSettings";
 import {
   startNewLocalThreadFromContext,
   startNewThreadFromContext,
@@ -90,7 +90,7 @@ function OpenCommandPaletteDialog() {
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const isActionsOnly = query.startsWith(">");
-  const { settings } = useAppSettings();
+  const settings = useSettings();
   const { activeDraftThread, activeThread, handleNewThread, projects } = useHandleNewThread();
   const threads = useStore((store) => store.threads);
   const serverConfigQuery = useQuery(serverConfigQueryOptions());

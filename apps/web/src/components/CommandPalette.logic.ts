@@ -1,6 +1,6 @@
 import { type KeybindingCommand } from "@t3tools/contracts";
+import type { SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import { type ReactNode } from "react";
-import type { SidebarThreadSortOrder } from "../appSettings";
 import { sortThreads } from "../lib/threadSort";
 import { formatRelativeTime } from "../relativeTime";
 import { type Project, type Thread } from "../types";

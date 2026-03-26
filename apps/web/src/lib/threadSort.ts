@@ -1,5 +1,5 @@
 import type { ProjectId } from "@t3tools/contracts";
-import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "../appSettings";
+import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import type { Thread } from "../types";
 
 type ThreadSortInput = Pick<Thread, "createdAt" | "updatedAt" | "messages">;
