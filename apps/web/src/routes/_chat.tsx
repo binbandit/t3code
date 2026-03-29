@@ -1,11 +1,9 @@
 import { type ResolvedKeybindingsConfig } from "@t3tools/contracts";
 import { useQuery } from "@tanstack/react-query";
-import { Outlet, createFileRoute, useNavigate } from "@tanstack/react-router";
+import { Outlet, createFileRoute } from "@tanstack/react-router";
 import { useEffect } from "react";
 
-import { CommandPalette } from "../components/CommandPalette";
 import { useCommandPaletteStore } from "../commandPaletteStore";
-import ThreadSidebar from "../components/Sidebar";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import {
   resolveThreadActionProjectId,
@@ -18,12 +16,8 @@ import { resolveShortcutCommand } from "../keybindings";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
 import { useSettings } from "~/hooks/useSettings";
-import { Sidebar, SidebarProvider, SidebarRail } from "~/components/ui/sidebar";
 
 const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
-const THREAD_SIDEBAR_WIDTH_STORAGE_KEY = "chat_thread_sidebar_width";
-const THREAD_SIDEBAR_MIN_WIDTH = 13 * 16;
-const THREAD_MAIN_CONTENT_MIN_WIDTH = 40 * 16;
 
 function ChatRouteGlobalShortcuts() {
   const clearSelection = useThreadSelectionStore((state) => state.clearSelection);
@@ -119,45 +113,11 @@ function ChatRouteGlobalShortcuts() {
 }
 
 function ChatRouteLayout() {
-  const navigate = useNavigate();
-
-  useEffect(() => {
-    const onMenuAction = window.desktopBridge?.onMenuAction;
-    if (typeof onMenuAction !== "function") {
-      return;
-    }
-
-    const unsubscribe = onMenuAction((action) => {
-      if (action !== "open-settings") return;
-      void navigate({ to: "/settings" });
-    });
-
-    return () => {
-      unsubscribe?.();
-    };
-  }, [navigate]);
-
   return (
-    <CommandPalette>
-      <SidebarProvider defaultOpen>
-        <ChatRouteGlobalShortcuts />
-        <Sidebar
-          side="left"
-          collapsible="offcanvas"
-          className="border-r border-border bg-card text-foreground"
-          resizable={{
-            minWidth: THREAD_SIDEBAR_MIN_WIDTH,
-            shouldAcceptWidth: ({ nextWidth, wrapper }) =>
-              wrapper.clientWidth - nextWidth >= THREAD_MAIN_CONTENT_MIN_WIDTH,
-            storageKey: THREAD_SIDEBAR_WIDTH_STORAGE_KEY,
-          }}
-        >
-          <ThreadSidebar />
-          <SidebarRail />
-        </Sidebar>
-        <Outlet />
-      </SidebarProvider>
-    </CommandPalette>
+    <>
+      <ChatRouteGlobalShortcuts />
+      <Outlet />
+    </>
   );
 }
 

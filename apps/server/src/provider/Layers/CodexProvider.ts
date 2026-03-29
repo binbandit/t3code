@@ -10,17 +10,17 @@ import type {
 } from "@t3tools/contracts";
 import { Effect, Equal, FileSystem, Layer, Option, Path, Result, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-import { getDefaultEffort, trimOrNull } from "@t3tools/shared/model";
+import { resolveEffort } from "@t3tools/shared/model";
 
 import {
   buildServerProvider,
-  collectStreamAsString,
   DEFAULT_TIMEOUT_MS,
   detailFromResult,
   extractAuthBoolean,
   isCommandMissingCause,
   parseGenericCliVersion,
   providerModelsFromSettings,
+  spawnAndCollect,
   type CommandResult,
 } from "../providerSnapshot";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
@@ -48,6 +48,7 @@ const BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
       ],
       supportsFastMode: true,
       supportsThinkingToggle: false,
+      contextWindowOptions: [],
       promptInjectedEffortLevels: [],
     },
   },
@@ -64,6 +65,7 @@ const BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
       ],
       supportsFastMode: true,
       supportsThinkingToggle: false,
+      contextWindowOptions: [],
       promptInjectedEffortLevels: [],
     },
   },
@@ -80,6 +82,7 @@ const BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
       ],
       supportsFastMode: true,
       supportsThinkingToggle: false,
+      contextWindowOptions: [],
       promptInjectedEffortLevels: [],
     },
   },
@@ -96,6 +99,7 @@ const BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
       ],
       supportsFastMode: true,
       supportsThinkingToggle: false,
+      contextWindowOptions: [],
       promptInjectedEffortLevels: [],
     },
   },
@@ -112,6 +116,7 @@ const BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
       ],
       supportsFastMode: true,
       supportsThinkingToggle: false,
+      contextWindowOptions: [],
       promptInjectedEffortLevels: [],
     },
   },
@@ -128,6 +133,7 @@ const BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
       ],
       supportsFastMode: true,
       supportsThinkingToggle: false,
+      contextWindowOptions: [],
       promptInjectedEffortLevels: [],
     },
   },
@@ -140,6 +146,7 @@ export function getCodexModelCapabilities(model: string | null | undefined): Mod
       reasoningEffortLevels: [],
       supportsFastMode: false,
       supportsThinkingToggle: false,
+      contextWindowOptions: [],
       promptInjectedEffortLevels: [],
     }
   );
@@ -150,11 +157,10 @@ export function normalizeCodexModelOptions(
   modelOptions: CodexModelOptions | null | undefined,
 ): CodexModelOptions | undefined {
   const caps = getCodexModelCapabilities(model);
-  const defaultReasoningEffort = getDefaultEffort(caps);
-  const reasoningEffort = trimOrNull(modelOptions?.reasoningEffort) ?? defaultReasoningEffort;
+  const reasoningEffort = resolveEffort(caps, modelOptions?.reasoningEffort);
   const fastModeEnabled = modelOptions?.fastMode === true;
   const nextOptions: CodexModelOptions = {
-    ...(reasoningEffort && reasoningEffort !== defaultReasoningEffort
+    ...(reasoningEffort
       ? { reasoningEffort: reasoningEffort as CodexModelOptions["reasoningEffort"] }
       : {}),
     ...(fastModeEnabled ? { fastMode: true } : {}),
@@ -286,7 +292,6 @@ export const hasCustomModelProvider = readCodexConfigModelProvider().pipe(
 
 const runCodexCommand = (args: ReadonlyArray<string>) =>
   Effect.gen(function* () {
-    const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
     const settingsService = yield* ServerSettingsService;
     const codexSettings = yield* settingsService.getSettings.pipe(
       Effect.map((settings) => settings.providers.codex),
@@ -298,19 +303,8 @@ const runCodexCommand = (args: ReadonlyArray<string>) =>
         ...(codexSettings.homePath ? { CODEX_HOME: codexSettings.homePath } : {}),
       },
     });
-
-    const child = yield* spawner.spawn(command);
-    const [stdout, stderr, exitCode] = yield* Effect.all(
-      [
-        collectStreamAsString(child.stdout),
-        collectStreamAsString(child.stderr),
-        child.exitCode.pipe(Effect.map(Number)),
-      ],
-      { concurrency: "unbounded" },
-    );
-
-    return { stdout, stderr, code: exitCode } satisfies CommandResult;
-  }).pipe(Effect.scoped);
+    return yield* spawnAndCollect(codexSettings.binaryPath, command);
+  });
 
 export const checkCodexProviderStatus = Effect.fn("checkCodexProviderStatus")(
   function* (): Effect.fn.Return<
