@@ -55,11 +55,14 @@ export function sortThreads<T extends Pick<Thread, "id" | "createdAt" | "updated
 }
 
 export function getLatestThreadForProject<
-  T extends Pick<Thread, "id" | "projectId" | "createdAt" | "updatedAt" | "messages">,
+  T extends Pick<
+    Thread,
+    "id" | "projectId" | "createdAt" | "updatedAt" | "messages" | "archivedAt"
+  >,
 >(threads: readonly T[], projectId: ProjectId, sortOrder: SidebarThreadSortOrder): T | null {
   return (
     sortThreads(
-      threads.filter((thread) => thread.projectId === projectId),
+      threads.filter((thread) => thread.projectId === projectId && thread.archivedAt === null),
       sortOrder,
     )[0] ?? null
   );

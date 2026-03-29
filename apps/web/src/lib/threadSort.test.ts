@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { DEFAULT_RUNTIME_MODE, ProjectId, ThreadId } from "@t3tools/contracts";
 import type { Thread } from "../types";
-import { sortThreads } from "./threadSort";
+import { getLatestThreadForProject, sortThreads } from "./threadSort";
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
   return {
@@ -152,5 +152,39 @@ describe("sortThreads", () => {
       ThreadId.makeUnsafe("thread-1"),
       ThreadId.makeUnsafe("thread-2"),
     ]);
+  });
+
+  it("returns the latest active thread for a project", () => {
+    const projectId = ProjectId.makeUnsafe("project-1");
+
+    const latestThread = getLatestThreadForProject(
+      [
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-1"),
+          projectId,
+          createdAt: "2026-03-09T10:00:00.000Z",
+          updatedAt: "2026-03-09T10:01:00.000Z",
+          archivedAt: null,
+        }),
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-2"),
+          projectId,
+          createdAt: "2026-03-09T10:05:00.000Z",
+          updatedAt: "2026-03-09T10:10:00.000Z",
+          archivedAt: "2026-03-10T00:00:00.000Z",
+        }),
+        makeThread({
+          id: ThreadId.makeUnsafe("thread-3"),
+          projectId,
+          createdAt: "2026-03-09T10:06:00.000Z",
+          updatedAt: "2026-03-09T10:06:00.000Z",
+          archivedAt: null,
+        }),
+      ],
+      projectId,
+      "updated_at",
+    );
+
+    expect(latestThread?.id).toBe(ThreadId.makeUnsafe("thread-3"));
   });
 });

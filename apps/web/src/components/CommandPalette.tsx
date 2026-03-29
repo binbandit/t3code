@@ -26,6 +26,7 @@ import {
   startNewThreadFromContext,
 } from "../lib/chatThreadActions";
 import { serverConfigQueryOptions } from "../lib/serverReactQuery";
+import { getLatestThreadForProject } from "../lib/threadSort";
 import { cn } from "../lib/utils";
 import { useStore } from "../store";
 import {
@@ -106,6 +107,45 @@ function OpenCommandPaletteDialog() {
 
   const activeThreadId = activeThread?.id;
   const currentProjectId = activeThread?.projectId ?? activeDraftThread?.projectId ?? null;
+
+  const openProjectFromSearch = useMemo(
+    () => async (projectId: (typeof projects)[number]["id"]) => {
+      const latestThread = getLatestThreadForProject(
+        threads,
+        projectId,
+        settings.sidebarThreadSortOrder,
+      );
+      if (latestThread) {
+        await navigate({
+          to: "/$threadId",
+          params: { threadId: latestThread.id },
+        });
+        return;
+      }
+
+      await handleNewThread(projectId, {
+        envMode: settings.defaultThreadEnvMode,
+      });
+    },
+    [
+      handleNewThread,
+      navigate,
+      settings.defaultThreadEnvMode,
+      settings.sidebarThreadSortOrder,
+      threads,
+    ],
+  );
+
+  const projectSearchItems = useMemo(
+    () =>
+      buildProjectActionItems({
+        projects,
+        valuePrefix: "project",
+        icon: <FolderIcon className={ITEM_ICON_CLASS} />,
+        runProject: openProjectFromSearch,
+      }),
+    [openProjectFromSearch, projects],
+  );
 
   const projectThreadItems = useMemo(
     () =>
@@ -280,7 +320,7 @@ function OpenCommandPaletteDialog() {
     activeGroups,
     query: deferredQuery,
     isInSubmenu: currentView !== null,
-    projectSearchItems: projectThreadItems,
+    projectSearchItems: projectSearchItems,
     threadSearchItems: allThreadItems,
   });
 

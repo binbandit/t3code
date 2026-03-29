@@ -448,11 +448,46 @@ function createSnapshotWithLongProposedPlan(): OrchestrationReadModel {
   };
 }
 
-function createSnapshotWithSecondaryProject(): OrchestrationReadModel {
+function createSnapshotWithSecondaryProject(options?: {
+  includeSecondaryThread?: boolean;
+}): OrchestrationReadModel {
   const snapshot = createSnapshotForTargetUser({
     targetMessageId: "msg-user-secondary-project-target" as MessageId,
     targetText: "secondary project",
   });
+  const includeSecondaryThread = options?.includeSecondaryThread ?? true;
+  const secondaryThreads: OrchestrationReadModel["threads"] = includeSecondaryThread
+    ? [
+        {
+          id: "thread-secondary-project" as ThreadId,
+          projectId: SECOND_PROJECT_ID,
+          title: "Release checklist",
+          modelSelection: { provider: "codex", model: "gpt-5" },
+          interactionMode: "default",
+          runtimeMode: "full-access",
+          branch: "release/docs-portal",
+          worktreePath: null,
+          latestTurn: null,
+          createdAt: isoAt(30),
+          updatedAt: isoAt(31),
+          deletedAt: null,
+          messages: [],
+          activities: [],
+          proposedPlans: [],
+          checkpoints: [],
+          session: {
+            threadId: "thread-secondary-project" as ThreadId,
+            status: "ready",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: isoAt(31),
+          },
+          archivedAt: null,
+        },
+      ]
+    : [];
 
   return {
     ...snapshot,
@@ -469,37 +504,7 @@ function createSnapshotWithSecondaryProject(): OrchestrationReadModel {
         deletedAt: null,
       },
     ],
-    threads: [
-      ...snapshot.threads,
-      {
-        id: "thread-secondary-project" as ThreadId,
-        projectId: SECOND_PROJECT_ID,
-        title: "Release checklist",
-        modelSelection: { provider: "codex", model: "gpt-5" },
-        interactionMode: "default",
-        runtimeMode: "full-access",
-        branch: "release/docs-portal",
-        worktreePath: null,
-        latestTurn: null,
-        createdAt: isoAt(30),
-        updatedAt: isoAt(31),
-        deletedAt: null,
-        messages: [],
-        activities: [],
-        proposedPlans: [],
-        checkpoints: [],
-        session: {
-          threadId: "thread-secondary-project" as ThreadId,
-          status: "ready",
-          providerName: "codex",
-          runtimeMode: "full-access",
-          activeTurnId: null,
-          lastError: null,
-          updatedAt: isoAt(31),
-        },
-        archivedAt: null,
-      },
-    ],
+    threads: [...snapshot.threads, ...secondaryThreads],
   };
 }
 
@@ -2372,10 +2377,72 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
-  it("searches projects by path and opens a new thread using the default env mode", async () => {
+  it("searches projects by path and opens the latest thread for that project", async () => {
     const mounted = await mountChatView({
       viewport: DEFAULT_VIEWPORT,
       snapshot: createSnapshotWithSecondaryProject(),
+      configureFixture: (nextFixture) => {
+        nextFixture.serverConfig = {
+          ...nextFixture.serverConfig,
+          settings: {
+            ...nextFixture.serverConfig.settings,
+            defaultThreadEnvMode: "worktree",
+          },
+          keybindings: [
+            {
+              command: "commandPalette.toggle",
+              shortcut: {
+                key: "k",
+                metaKey: false,
+                ctrlKey: false,
+                shiftKey: false,
+                altKey: false,
+                modKey: true,
+              },
+              whenAst: {
+                type: "not",
+                node: { type: "identifier", name: "terminalFocus" },
+              },
+            },
+          ],
+        };
+      },
+    });
+
+    try {
+      await waitForServerConfigToApply();
+      await waitForCommandPaletteShortcutLabel();
+      const palette = page.getByTestId("command-palette");
+      await openCommandPaletteFromTrigger();
+
+      await expect.element(palette).toBeInTheDocument();
+      await page.getByPlaceholder("Search commands, projects, and threads...").fill("clients/docs");
+      await expect.element(palette.getByText("Docs Portal", { exact: true })).toBeInTheDocument();
+      await expect
+        .element(palette.getByText("/repo/clients/docs-portal", { exact: true }))
+        .toBeInTheDocument();
+      await palette.getByText("Docs Portal", { exact: true }).click();
+
+      const nextPath = await waitForURL(
+        mounted.router,
+        (path) => path === "/thread-secondary-project",
+        "Route should have changed to the latest thread for the selected project.",
+      );
+      expect(nextPath).toBe("/thread-secondary-project");
+      expect(
+        useComposerDraftStore.getState().draftThreadsByThreadId[
+          "thread-secondary-project" as ThreadId
+        ],
+      ).toBeUndefined();
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("creates a new thread from project search when no active project thread exists", async () => {
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotWithSecondaryProject({ includeSecondaryThread: false }),
       configureFixture: (nextFixture) => {
         nextFixture.serverConfig = {
           ...nextFixture.serverConfig,

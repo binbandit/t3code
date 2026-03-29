@@ -120,6 +120,7 @@ import {
   sortThreadsForSidebar,
 } from "./Sidebar.logic";
 import { SidebarUpdatePill } from "./sidebar/SidebarUpdatePill";
+import { getLatestThreadForProject } from "../lib/threadSort";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { CommandDialogTrigger } from "./ui/command";
 import { useSettings, useUpdateSettings } from "~/hooks/useSettings";
@@ -485,10 +486,11 @@ export default function Sidebar() {
 
   const focusMostRecentThreadForProject = useCallback(
     (projectId: ProjectId) => {
-      const latestThread = sortThreadsForSidebar(
-        threads.filter((thread) => thread.projectId === projectId && thread.archivedAt === null),
+      const latestThread = getLatestThreadForProject(
+        threads,
+        projectId,
         appSettings.sidebarThreadSortOrder,
-      )[0];
+      );
       if (!latestThread) return;
 
       void navigate({
