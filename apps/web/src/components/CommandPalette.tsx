@@ -5,7 +5,6 @@ import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
-  ArchiveIcon,
   FolderIcon,
   MessageSquareIcon,
   SettingsIcon,
@@ -22,7 +21,6 @@ import {
 import { useCommandPaletteStore } from "../commandPaletteStore";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useSettings } from "../hooks/useSettings";
-import { useThreadActions } from "../hooks/useThreadActions";
 import {
   startNewLocalThreadFromContext,
   startNewThreadFromContext,
@@ -33,7 +31,6 @@ import { cn } from "../lib/utils";
 import { useStore } from "../store";
 import {
   ADDON_ICON_CLASS,
-  buildArchivedThreadActionItems,
   buildProjectActionItems,
   buildRootGroups,
   buildThreadActionItems,
@@ -96,7 +93,6 @@ function OpenCommandPaletteDialog() {
   const isActionsOnly = query.startsWith(">");
   const settings = useSettings();
   const { activeDraftThread, activeThread, handleNewThread, projects } = useHandleNewThread();
-  const { unarchiveThread } = useThreadActions();
   const threads = useStore((store) => store.threads);
   const serverConfigQuery = useQuery(serverConfigQueryOptions());
   const keybindings = serverConfigQuery.data?.keybindings ?? [];
@@ -179,24 +175,6 @@ function OpenCommandPaletteDialog() {
         },
       }),
     [handleNewThread, projects],
-  );
-
-  const archivedThreadItems = useMemo(
-    () =>
-      buildArchivedThreadActionItems({
-        threads,
-        projectTitleById,
-        sortOrder: settings.sidebarThreadSortOrder,
-        icon: <ArchiveIcon className={ITEM_ICON_CLASS} />,
-        runThread: async (threadId) => {
-          await unarchiveThread(threadId);
-          await navigate({
-            to: "/$threadId",
-            params: { threadId },
-          });
-        },
-      }),
-    [navigate, projectTitleById, settings.sidebarThreadSortOrder, threads, unarchiveThread],
   );
 
   const allThreadItems = useMemo(
@@ -344,7 +322,6 @@ function OpenCommandPaletteDialog() {
     isInSubmenu: currentView !== null,
     projectSearchItems: projectSearchItems,
     threadSearchItems: allThreadItems,
-    archivedThreadSearchItems: archivedThreadItems,
   });
 
   const inputPlaceholder = getCommandPaletteInputPlaceholder(paletteMode);

@@ -2534,7 +2534,7 @@ describe("ChatView timeline estimator parity (full app)", () => {
     }
   });
 
-  it("searches archived threads and unarchives them before opening", async () => {
+  it("filters archived threads out of command palette search results", async () => {
     const mounted = await mountChatView({
       viewport: DEFAULT_VIEWPORT,
       snapshot: createSnapshotWithSecondaryProject(),
@@ -2569,38 +2569,10 @@ describe("ChatView timeline estimator parity (full app)", () => {
       await openCommandPaletteFromTrigger();
 
       await expect.element(palette).toBeInTheDocument();
-      await page
-        .getByPlaceholder("Search commands, projects, and threads...")
-        .fill("archived docs");
-      await expect
-        .element(palette.getByText("Archived Threads", { exact: true }))
-        .toBeInTheDocument();
+      await page.getByPlaceholder("Search commands, projects, and threads...").fill("docs-archive");
       await expect
         .element(palette.getByText("Archived Docs Notes", { exact: true }))
-        .toBeInTheDocument();
-      await palette.getByText("Archived Docs Notes", { exact: true }).click();
-
-      const nextPath = await waitForURL(
-        mounted.router,
-        (path) => path === `/${ARCHIVED_SECONDARY_THREAD_ID}`,
-        "Route should have changed to the archived thread after selecting it from search.",
-      );
-      expect(nextPath).toBe(`/${ARCHIVED_SECONDARY_THREAD_ID}`);
-
-      await vi.waitFor(() => {
-        expect(
-          wsRequests.some(
-            (request) =>
-              request._tag === ORCHESTRATION_WS_METHODS.dispatchCommand &&
-              request.command &&
-              typeof request.command === "object" &&
-              "type" in request.command &&
-              request.command.type === "thread.unarchive" &&
-              "threadId" in request.command &&
-              request.command.threadId === ARCHIVED_SECONDARY_THREAD_ID,
-          ),
-        ).toBe(true);
-      });
+        .not.toBeInTheDocument();
     } finally {
       await mounted.cleanup();
     }
