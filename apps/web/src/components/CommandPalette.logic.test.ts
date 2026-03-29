@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ProjectId, ThreadId } from "@t3tools/contracts";
 import type { Thread } from "../types";
 import {
+  buildArchivedThreadActionItems,
   buildThreadActionItems,
   filterCommandPaletteGroups,
   type CommandPaletteGroup,
@@ -137,6 +138,7 @@ describe("buildThreadActionItems", () => {
       isInSubmenu: false,
       projectSearchItems: [],
       threadSearchItems: threadItems,
+      archivedThreadSearchItems: [],
     });
 
     expect(groups).toHaveLength(1);
@@ -170,9 +172,56 @@ describe("buildThreadActionItems", () => {
       isInSubmenu: false,
       projectSearchItems: [],
       threadSearchItems: [],
+      archivedThreadSearchItems: [],
     });
 
     expect(groups).toHaveLength(1);
     expect(groups[0]?.items.map((item) => item.value)).toEqual(["thread:project-context-only"]);
+  });
+
+  it("builds archived thread items separately with archived metadata", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-25T12:00:00.000Z"));
+
+    try {
+      const projectId = ProjectId.makeUnsafe("project-1");
+      const items = buildArchivedThreadActionItems({
+        threads: [
+          {
+            id: ThreadId.makeUnsafe("thread-archived"),
+            codexThreadId: null,
+            projectId,
+            title: "Archived notes",
+            modelSelection: { provider: "codex", model: "gpt-5" },
+            runtimeMode: "full-access",
+            interactionMode: "default",
+            session: null,
+            messages: [],
+            proposedPlans: [],
+            error: null,
+            createdAt: "2026-03-01T00:00:00.000Z",
+            archivedAt: "2026-03-24T12:00:00.000Z",
+            updatedAt: "2026-03-20T00:00:00.000Z",
+            latestTurn: null,
+            branch: "feature/archive",
+            worktreePath: null,
+            turnDiffSummaries: [],
+            activities: [],
+          },
+        ] satisfies Thread[],
+        projectTitleById: new Map([[projectId, "Project"]]),
+        sortOrder: "updated_at",
+        icon: null,
+        runThread: async (_threadId) => undefined,
+      });
+
+      expect(items).toHaveLength(1);
+      expect(items[0]?.value).toBe("archived-thread:thread-archived");
+      expect(items[0]?.description).toBe("Project · #feature/archive · Archived");
+      expect(items[0]?.timestamp).toBe("Archived yesterday");
+      expect(items[0]?.searchTerms).toContain("archived");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

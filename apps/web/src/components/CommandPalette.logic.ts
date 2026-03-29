@@ -79,7 +79,10 @@ export function buildThreadActionItems(input: {
   runThread: (threadId: Thread["id"]) => Promise<void>;
   limit?: number;
 }): CommandPaletteActionItem[] {
-  const sortedThreads = sortThreads(input.threads, input.sortOrder);
+  const sortedThreads = sortThreads(
+    input.threads.filter((thread) => thread.archivedAt === null),
+    input.sortOrder,
+  );
   const visibleThreads =
     input.limit === undefined ? sortedThreads : sortedThreads.slice(0, input.limit);
 
@@ -104,6 +107,45 @@ export function buildThreadActionItems(input: {
       title: thread.title,
       description: descriptionParts.join(" · "),
       timestamp: formatRelativeTime(thread.updatedAt ?? thread.createdAt, Date.now(), "long"),
+      icon: input.icon,
+      run: async () => {
+        await input.runThread(thread.id);
+      },
+    };
+  });
+}
+
+export function buildArchivedThreadActionItems(input: {
+  threads: ReadonlyArray<Thread>;
+  projectTitleById: ReadonlyMap<Project["id"], string>;
+  sortOrder: SidebarThreadSortOrder;
+  icon: ReactNode;
+  runThread: (threadId: Thread["id"]) => Promise<void>;
+}): CommandPaletteActionItem[] {
+  const archivedThreads = sortThreads(
+    input.threads.filter((thread) => thread.archivedAt !== null),
+    input.sortOrder,
+  );
+
+  return archivedThreads.map((thread) => {
+    const projectTitle = input.projectTitleById.get(thread.projectId);
+    const descriptionParts: string[] = [];
+
+    if (projectTitle) {
+      descriptionParts.push(projectTitle);
+    }
+    if (thread.branch) {
+      descriptionParts.push(`#${thread.branch}`);
+    }
+    descriptionParts.push("Archived");
+
+    return {
+      kind: "action",
+      value: `archived-thread:${thread.id}`,
+      searchTerms: [thread.title, projectTitle ?? "", thread.branch ?? "", "archived"],
+      title: thread.title,
+      description: descriptionParts.join(" · "),
+      timestamp: `Archived ${formatRelativeTime(thread.archivedAt ?? thread.createdAt, Date.now(), "long")}`,
       icon: input.icon,
       run: async () => {
         await input.runThread(thread.id);
@@ -151,6 +193,7 @@ export function filterCommandPaletteGroups(input: {
   isInSubmenu: boolean;
   projectSearchItems: ReadonlyArray<CommandPaletteActionItem>;
   threadSearchItems: ReadonlyArray<CommandPaletteActionItem>;
+  archivedThreadSearchItems: ReadonlyArray<CommandPaletteActionItem>;
 }): CommandPaletteGroup[] {
   const isActionsFilter = input.query.startsWith(">");
   const searchQuery = isActionsFilter ? input.query.slice(1) : input.query;
@@ -184,6 +227,13 @@ export function filterCommandPaletteGroups(input: {
         value: "threads-search",
         label: "Threads",
         items: input.threadSearchItems,
+      });
+    }
+    if (input.archivedThreadSearchItems.length > 0) {
+      searchableGroups.push({
+        value: "archived-threads-search",
+        label: "Archived Threads",
+        items: input.archivedThreadSearchItems,
       });
     }
   }

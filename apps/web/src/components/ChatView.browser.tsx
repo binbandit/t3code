@@ -34,6 +34,7 @@ import { estimateTimelineMessageHeight } from "./timelineHeight";
 import { DEFAULT_CLIENT_SETTINGS } from "@t3tools/contracts/settings";
 
 const THREAD_ID = "thread-browser-test" as ThreadId;
+const ARCHIVED_SECONDARY_THREAD_ID = "thread-secondary-project-archived" as ThreadId;
 const UUID_ROUTE_RE = /^\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const PROJECT_ID = "project-1" as ProjectId;
 const SECOND_PROJECT_ID = "project-2" as ProjectId;
@@ -450,12 +451,14 @@ function createSnapshotWithLongProposedPlan(): OrchestrationReadModel {
 
 function createSnapshotWithSecondaryProject(options?: {
   includeSecondaryThread?: boolean;
+  includeArchivedSecondaryThread?: boolean;
 }): OrchestrationReadModel {
   const snapshot = createSnapshotForTargetUser({
     targetMessageId: "msg-user-secondary-project-target" as MessageId,
     targetText: "secondary project",
   });
   const includeSecondaryThread = options?.includeSecondaryThread ?? true;
+  const includeArchivedSecondaryThread = options?.includeArchivedSecondaryThread ?? true;
   const secondaryThreads: OrchestrationReadModel["threads"] = includeSecondaryThread
     ? [
         {
@@ -488,6 +491,38 @@ function createSnapshotWithSecondaryProject(options?: {
         },
       ]
     : [];
+  const archivedSecondaryThreads: OrchestrationReadModel["threads"] = includeArchivedSecondaryThread
+    ? [
+        {
+          id: ARCHIVED_SECONDARY_THREAD_ID,
+          projectId: SECOND_PROJECT_ID,
+          title: "Archived Docs Notes",
+          modelSelection: { provider: "codex", model: "gpt-5" },
+          interactionMode: "default",
+          runtimeMode: "full-access",
+          branch: "release/docs-archive",
+          worktreePath: null,
+          latestTurn: null,
+          createdAt: isoAt(24),
+          updatedAt: isoAt(25),
+          deletedAt: null,
+          messages: [],
+          activities: [],
+          proposedPlans: [],
+          checkpoints: [],
+          session: {
+            threadId: ARCHIVED_SECONDARY_THREAD_ID,
+            status: "ready",
+            providerName: "codex",
+            runtimeMode: "full-access",
+            activeTurnId: null,
+            lastError: null,
+            updatedAt: isoAt(25),
+          },
+          archivedAt: isoAt(26),
+        },
+      ]
+    : [];
 
   return {
     ...snapshot,
@@ -504,7 +539,7 @@ function createSnapshotWithSecondaryProject(options?: {
         deletedAt: null,
       },
     ],
-    threads: [...snapshot.threads, ...secondaryThreads],
+    threads: [...snapshot.threads, ...secondaryThreads, ...archivedSecondaryThreads],
   };
 }
 
@@ -2494,6 +2529,78 @@ describe("ChatView timeline estimator parity (full app)", () => {
       const draftThread = useComposerDraftStore.getState().draftThreadsByThreadId[nextThreadId];
       expect(draftThread?.projectId).toBe(SECOND_PROJECT_ID);
       expect(draftThread?.envMode).toBe("worktree");
+    } finally {
+      await mounted.cleanup();
+    }
+  });
+
+  it("searches archived threads and unarchives them before opening", async () => {
+    const mounted = await mountChatView({
+      viewport: DEFAULT_VIEWPORT,
+      snapshot: createSnapshotWithSecondaryProject(),
+      configureFixture: (nextFixture) => {
+        nextFixture.serverConfig = {
+          ...nextFixture.serverConfig,
+          keybindings: [
+            {
+              command: "commandPalette.toggle",
+              shortcut: {
+                key: "k",
+                metaKey: false,
+                ctrlKey: false,
+                shiftKey: false,
+                altKey: false,
+                modKey: true,
+              },
+              whenAst: {
+                type: "not",
+                node: { type: "identifier", name: "terminalFocus" },
+              },
+            },
+          ],
+        };
+      },
+    });
+
+    try {
+      await waitForServerConfigToApply();
+      await waitForCommandPaletteShortcutLabel();
+      const palette = page.getByTestId("command-palette");
+      await openCommandPaletteFromTrigger();
+
+      await expect.element(palette).toBeInTheDocument();
+      await page
+        .getByPlaceholder("Search commands, projects, and threads...")
+        .fill("archived docs");
+      await expect
+        .element(palette.getByText("Archived Threads", { exact: true }))
+        .toBeInTheDocument();
+      await expect
+        .element(palette.getByText("Archived Docs Notes", { exact: true }))
+        .toBeInTheDocument();
+      await palette.getByText("Archived Docs Notes", { exact: true }).click();
+
+      const nextPath = await waitForURL(
+        mounted.router,
+        (path) => path === `/${ARCHIVED_SECONDARY_THREAD_ID}`,
+        "Route should have changed to the archived thread after selecting it from search.",
+      );
+      expect(nextPath).toBe(`/${ARCHIVED_SECONDARY_THREAD_ID}`);
+
+      await vi.waitFor(() => {
+        expect(
+          wsRequests.some(
+            (request) =>
+              request._tag === ORCHESTRATION_WS_METHODS.dispatchCommand &&
+              request.command &&
+              typeof request.command === "object" &&
+              "type" in request.command &&
+              request.command.type === "thread.unarchive" &&
+              "threadId" in request.command &&
+              request.command.threadId === ARCHIVED_SECONDARY_THREAD_ID,
+          ),
+        ).toBe(true);
+      });
     } finally {
       await mounted.cleanup();
     }
