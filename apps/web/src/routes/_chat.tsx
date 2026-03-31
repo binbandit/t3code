@@ -22,7 +22,7 @@ const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
 function ChatRouteGlobalShortcuts() {
   const clearSelection = useThreadSelectionStore((state) => state.clearSelection);
   const selectedThreadIdsSize = useThreadSelectionStore((state) => state.selectedThreadIds.size);
-  const { activeDraftThread, activeThread, handleNewThread, projects, routeThreadId } =
+  const { activeDraftThread, activeThread, defaultProjectId, handleNewThread, routeThreadId } =
     useHandleNewThread();
   const commandPaletteOpen = useCommandPaletteStore((s) => s.open);
   const toggleOpen = useCommandPaletteStore((s) => s.toggleOpen);
@@ -72,7 +72,7 @@ function ChatRouteGlobalShortcuts() {
         activeThread,
         defaultThreadEnvMode: appSettings.defaultThreadEnvMode,
         handleNewThread,
-        projects,
+        projects: defaultProjectId ? [{ id: defaultProjectId } as const] : [],
       } as const;
 
       if (!resolveThreadActionProjectId(threadActionContext)) {
@@ -102,7 +102,7 @@ function ChatRouteGlobalShortcuts() {
     commandPaletteOpen,
     handleNewThread,
     keybindings,
-    projects,
+    defaultProjectId,
     selectedThreadIdsSize,
     terminalOpen,
     toggleOpen,

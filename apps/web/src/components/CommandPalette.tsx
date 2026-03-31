@@ -92,7 +92,8 @@ function OpenCommandPaletteDialog() {
   const deferredQuery = useDeferredValue(query);
   const isActionsOnly = query.startsWith(">");
   const settings = useSettings();
-  const { activeDraftThread, activeThread, handleNewThread, projects } = useHandleNewThread();
+  const { activeDraftThread, activeThread, handleNewThread } = useHandleNewThread();
+  const projects = useStore((store) => store.projects);
   const threads = useStore((store) => store.threads);
   const serverConfigQuery = useQuery(serverConfigQueryOptions());
   const keybindings = serverConfigQuery.data?.keybindings ?? [];
