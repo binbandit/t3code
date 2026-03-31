@@ -93,25 +93,8 @@ export const makeDrainableWorker = <A, E, R>(
         }
       });
 
-    const drain: DrainableWorker<A>["drain"] = Effect.suspend(() =>
-      Ref.get(state).pipe(
-        Effect.flatMap(({ idle }) =>
-          Deferred.isDone(idle).pipe(
-            Effect.flatMap((done) =>
-              done
-                ? // Re-read state to ensure no new work was enqueued between
-                  // Ref.get and now. If the current idle deferred is still the
-                  // same one, the worker is truly idle; otherwise retry.
-                  Ref.get(state).pipe(
-                    Effect.flatMap((current) =>
-                      current.idle === idle ? Effect.void : Deferred.await(current.idle),
-                    ),
-                  )
-                : Deferred.await(idle),
-            ),
-          ),
-        ),
-      ),
+    const drain: DrainableWorker<A>["drain"] = Ref.get(state).pipe(
+      Effect.flatMap(({ idle }) => Deferred.await(idle)),
     );
 
     return { enqueue, drain } satisfies DrainableWorker<A>;
