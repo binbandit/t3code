@@ -1,5 +1,6 @@
 "use client";
 
+import type { ProjectId } from "@t3tools/contracts";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -102,7 +103,7 @@ function OpenCommandPaletteDialog() {
   const paletteMode = getCommandPaletteMode({ currentView });
 
   const projectTitleById = useMemo(
-    () => new Map(projects.map((project) => [project.id, project.name] as const)),
+    () => new Map<ProjectId, string>(projects.map((project) => [project.id, project.name])),
     [projects],
   );
 

@@ -72,8 +72,8 @@ function ChatRouteGlobalShortcuts() {
         activeThread,
         defaultThreadEnvMode: appSettings.defaultThreadEnvMode,
         handleNewThread,
-        projects: defaultProjectId ? [{ id: defaultProjectId } as const] : [],
-      } as const;
+        projects: defaultProjectId ? [{ id: defaultProjectId }] : [],
+      };
 
       if (!resolveThreadActionProjectId(threadActionContext)) {
         return;
