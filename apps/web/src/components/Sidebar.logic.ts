@@ -1,6 +1,11 @@
 import * as React from "react";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
-import { toSortableTimestamp } from "../lib/threadSort";
+import {
+  getThreadSortTimestamp,
+  sortThreads,
+  toSortableTimestamp,
+  type ThreadSortInput,
+} from "../lib/threadSort";
 import type { Thread } from "../types";
 import { cn } from "../lib/utils";
 import {
@@ -17,10 +22,6 @@ type SidebarProject = {
   name: string;
   createdAt?: string | undefined;
   updatedAt?: string | undefined;
-};
-type SidebarThreadSortInput = Pick<Thread, "createdAt" | "updatedAt"> & {
-  latestUserMessageAt?: string | null;
-  messages?: Pick<Thread["messages"][number], "createdAt" | "role">[];
 };
 
 export type ThreadTraversalDirection = "previous" | "next";
@@ -409,55 +410,8 @@ export function getVisibleThreadsForProject<T extends Pick<Thread, "id">>(input:
   };
 }
 
-function getLatestUserMessageTimestamp(thread: SidebarThreadSortInput): number {
-  if (thread.latestUserMessageAt) {
-    return toSortableTimestamp(thread.latestUserMessageAt) ?? Number.NEGATIVE_INFINITY;
-  }
-
-  let latestUserMessageTimestamp: number | null = null;
-
-  for (const message of thread.messages ?? []) {
-    if (message.role !== "user") continue;
-    const messageTimestamp = toSortableTimestamp(message.createdAt);
-    if (messageTimestamp === null) continue;
-    latestUserMessageTimestamp =
-      latestUserMessageTimestamp === null
-        ? messageTimestamp
-        : Math.max(latestUserMessageTimestamp, messageTimestamp);
-  }
-
-  if (latestUserMessageTimestamp !== null) {
-    return latestUserMessageTimestamp;
-  }
-
-  return toSortableTimestamp(thread.updatedAt ?? thread.createdAt) ?? Number.NEGATIVE_INFINITY;
-}
-
-function getThreadSortTimestamp(
-  thread: SidebarThreadSortInput,
-  sortOrder: SidebarThreadSortOrder | Exclude<SidebarProjectSortOrder, "manual">,
-): number {
-  if (sortOrder === "created_at") {
-    return toSortableTimestamp(thread.createdAt) ?? Number.NEGATIVE_INFINITY;
-  }
-  return getLatestUserMessageTimestamp(thread);
-}
-
-export function sortThreadsForSidebar<
-  T extends Pick<Thread, "id" | "createdAt" | "updatedAt"> & SidebarThreadSortInput,
->(threads: readonly T[], sortOrder: SidebarThreadSortOrder): T[] {
-  return threads.toSorted((left, right) => {
-    const rightTimestamp = getThreadSortTimestamp(right, sortOrder);
-    const leftTimestamp = getThreadSortTimestamp(left, sortOrder);
-    const byTimestamp =
-      rightTimestamp === leftTimestamp ? 0 : rightTimestamp > leftTimestamp ? 1 : -1;
-    if (byTimestamp !== 0) return byTimestamp;
-    return right.id.localeCompare(left.id);
-  });
-}
-
 export function getFallbackThreadIdAfterDelete<
-  T extends Pick<Thread, "id" | "projectId" | "createdAt" | "updatedAt"> & SidebarThreadSortInput,
+  T extends Pick<Thread, "id" | "projectId" | "createdAt" | "updatedAt"> & ThreadSortInput,
 >(input: {
   threads: readonly T[];
   deletedThreadId: T["id"];
@@ -471,7 +425,7 @@ export function getFallbackThreadIdAfterDelete<
   }
 
   return (
-    sortThreadsForSidebar(
+    sortThreads(
       threads.filter(
         (thread) =>
           thread.projectId === deletedThread.projectId &&
@@ -484,7 +438,7 @@ export function getFallbackThreadIdAfterDelete<
 }
 export function getProjectSortTimestamp(
   project: SidebarProject,
-  projectThreads: readonly SidebarThreadSortInput[],
+  projectThreads: readonly ThreadSortInput[],
   sortOrder: Exclude<SidebarProjectSortOrder, "manual">,
 ): number {
   if (projectThreads.length > 0) {
@@ -502,7 +456,7 @@ export function getProjectSortTimestamp(
 
 export function sortProjectsForSidebar<
   TProject extends SidebarProject,
-  TThread extends Pick<Thread, "projectId" | "createdAt" | "updatedAt"> & SidebarThreadSortInput,
+  TThread extends Pick<Thread, "projectId" | "createdAt" | "updatedAt"> & ThreadSortInput,
 >(
   projects: readonly TProject[],
   threads: readonly TThread[],

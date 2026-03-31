@@ -121,10 +121,10 @@ import {
   orderItemsByPreferredIds,
   shouldClearThreadSelectionOnMouseDown,
   sortProjectsForSidebar,
-  sortThreadsForSidebar,
   useThreadJumpHintVisibility,
 } from "./Sidebar.logic";
 import { SidebarUpdatePill } from "./sidebar/SidebarUpdatePill";
+import { sortThreads } from "../lib/threadSort";
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
 import { CommandDialogTrigger } from "./ui/command";
 import { useSettings, useUpdateSettings } from "~/hooks/useSettings";
@@ -632,7 +632,7 @@ export default function Sidebar() {
 
   const focusMostRecentThreadForProject = useCallback(
     (projectId: ProjectId) => {
-      const latestThread = sortThreadsForSidebar(
+      const latestThread = sortThreads(
         threads.filter((thread) => thread.projectId === projectId && thread.archivedAt === null),
         appSettings.sidebarThreadSortOrder,
       )[0];
@@ -1171,7 +1171,7 @@ export default function Sidebar() {
   const renderedProjects = useMemo(
     () =>
       sortedProjects.map((project) => {
-        const projectThreads = sortThreadsForSidebar(
+        const projectThreads = sortThreads(
           visibleThreads.filter((thread) => thread.projectId === project.id),
           appSettings.sidebarThreadSortOrder,
         );

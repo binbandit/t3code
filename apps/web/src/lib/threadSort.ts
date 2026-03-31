@@ -2,7 +2,10 @@ import type { ProjectId } from "@t3tools/contracts";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import type { Thread } from "../types";
 
-type ThreadSortInput = Pick<Thread, "createdAt" | "updatedAt" | "messages">;
+export type ThreadSortInput = Pick<Thread, "createdAt" | "updatedAt"> & {
+  latestUserMessageAt?: string | null;
+  messages?: Pick<Thread["messages"][number], "createdAt" | "role">[];
+};
 
 export function toSortableTimestamp(iso: string | undefined): number | null {
   if (!iso) return null;
@@ -11,9 +14,13 @@ export function toSortableTimestamp(iso: string | undefined): number | null {
 }
 
 function getLatestUserMessageTimestamp(thread: ThreadSortInput): number {
+  if (thread.latestUserMessageAt) {
+    return toSortableTimestamp(thread.latestUserMessageAt) ?? Number.NEGATIVE_INFINITY;
+  }
+
   let latestUserMessageTimestamp: number | null = null;
 
-  for (const message of thread.messages) {
+  for (const message of thread.messages ?? []) {
     if (message.role !== "user") continue;
     const messageTimestamp = toSortableTimestamp(message.createdAt);
     if (messageTimestamp === null) continue;
@@ -40,7 +47,7 @@ export function getThreadSortTimestamp(
   return getLatestUserMessageTimestamp(thread);
 }
 
-export function sortThreads<T extends Pick<Thread, "id" | "createdAt" | "updatedAt" | "messages">>(
+export function sortThreads<T extends Pick<Thread, "id"> & ThreadSortInput>(
   threads: readonly T[],
   sortOrder: SidebarThreadSortOrder,
 ): T[] {
@@ -55,10 +62,7 @@ export function sortThreads<T extends Pick<Thread, "id" | "createdAt" | "updated
 }
 
 export function getLatestThreadForProject<
-  T extends Pick<
-    Thread,
-    "id" | "projectId" | "createdAt" | "updatedAt" | "messages" | "archivedAt"
-  >,
+  T extends Pick<Thread, "id" | "projectId" | "archivedAt"> & ThreadSortInput,
 >(threads: readonly T[], projectId: ProjectId, sortOrder: SidebarThreadSortOrder): T | null {
   return (
     sortThreads(
