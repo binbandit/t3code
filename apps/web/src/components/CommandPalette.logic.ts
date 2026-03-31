@@ -2,7 +2,7 @@ import { type KeybindingCommand } from "@t3tools/contracts";
 import type { SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import { type ReactNode } from "react";
 import { sortThreads } from "../lib/threadSort";
-import { formatRelativeTime } from "../relativeTime";
+import { formatRelativeTimeLabel } from "../timestampFormat";
 import { type Project, type Thread } from "../types";
 
 export const RECENT_THREAD_LIMIT = 12;
@@ -106,7 +106,7 @@ export function buildThreadActionItems(input: {
       searchTerms: [thread.title, projectTitle ?? "", thread.branch ?? ""],
       title: thread.title,
       description: descriptionParts.join(" · "),
-      timestamp: formatRelativeTime(thread.updatedAt ?? thread.createdAt, Date.now(), "long"),
+      timestamp: formatRelativeTimeLabel(thread.updatedAt ?? thread.createdAt, "long"),
       icon: input.icon,
       run: async () => {
         await input.runThread(thread.id);

@@ -48,29 +48,93 @@ export function formatShortTimestamp(isoDate: string, timestampFormat: Timestamp
   return getTimestampFormatter(timestampFormat, false).format(new Date(isoDate));
 }
 
-/**
- * Format a relative time string from an ISO date.
- * Returns `{ value: "20s", suffix: "ago" }` or `{ value: "just now", suffix: null }`
- * so callers can style the numeric portion independently.
- */
-export function formatCompactRelativeTime(isoDate: string): {
-  value: string;
-  suffix: string | null;
-} {
-  const diffMs = Date.now() - new Date(isoDate).getTime();
-  if (diffMs < 0) return { value: "just now", suffix: null };
-  const seconds = Math.floor(diffMs / 1000);
-  if (seconds < 5) return { value: "just now", suffix: null };
-  if (seconds < 60) return { value: `${seconds}s`, suffix: "ago" };
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return { value: `${minutes}m`, suffix: "ago" };
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return { value: `${hours}h`, suffix: "ago" };
-  const days = Math.floor(hours / 24);
-  return { value: `${days}d`, suffix: "ago" };
+// ---------------------------------------------------------------------------
+// Relative time formatting
+// ---------------------------------------------------------------------------
+
+const MINUTE_MS = 60_000;
+const HOUR_MS = 60 * MINUTE_MS;
+const DAY_MS = 24 * HOUR_MS;
+const WEEK_MS = 7 * DAY_MS;
+const MONTH_MS = 30 * DAY_MS;
+const YEAR_MS = 365 * DAY_MS;
+
+export type RelativeTimeStyle = "long" | "short";
+
+let relativeTimeFormatter: Intl.RelativeTimeFormat | null = null;
+
+function formatLongUnit(value: number, unit: Intl.RelativeTimeFormatUnit): string {
+  if (relativeTimeFormatter === null) {
+    relativeTimeFormatter = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  }
+  return relativeTimeFormatter.format(-value, unit);
 }
 
-export function formatRelativeTimeLabel(isoDate: string) {
-  const relative = formatCompactRelativeTime(isoDate);
+interface RelativeTimeBucket {
+  threshold: number;
+  divisor: number;
+  unit: Intl.RelativeTimeFormatUnit;
+  shortSuffix: string;
+}
+
+const BUCKETS: RelativeTimeBucket[] = [
+  { threshold: MINUTE_MS, divisor: MINUTE_MS, unit: "minute", shortSuffix: "m" },
+  { threshold: HOUR_MS, divisor: HOUR_MS, unit: "hour", shortSuffix: "h" },
+  { threshold: DAY_MS, divisor: DAY_MS, unit: "day", shortSuffix: "d" },
+  { threshold: WEEK_MS, divisor: WEEK_MS, unit: "week", shortSuffix: "w" },
+  { threshold: MONTH_MS, divisor: MONTH_MS, unit: "month", shortSuffix: "mo" },
+  { threshold: YEAR_MS, divisor: YEAR_MS, unit: "year", shortSuffix: "y" },
+];
+
+function resolveRelativeBucket(
+  diffMs: number,
+): { value: number; bucket: RelativeTimeBucket } | null {
+  if (diffMs < MINUTE_MS) return null;
+
+  let matched = BUCKETS[0]!;
+  for (const bucket of BUCKETS) {
+    if (diffMs >= bucket.threshold) {
+      matched = bucket;
+    }
+  }
+  return { value: Math.floor(diffMs / matched.divisor), bucket: matched };
+}
+
+/**
+ * Structured relative time for callers that style value and suffix independently.
+ *
+ * - `"short"` (default): `{ value: "5m", suffix: "ago" }`
+ * - `"long"`: `{ value: "5 minutes", suffix: "ago" }`
+ * - Returns `{ value: "just now", suffix: null }` for times under a minute.
+ */
+export function formatRelativeTime(
+  isoDate: string,
+  nowMs = Date.now(),
+  style: RelativeTimeStyle = "short",
+): { value: string; suffix: string | null } {
+  const targetMs = Date.parse(isoDate);
+  if (Number.isNaN(targetMs)) return { value: "", suffix: null };
+
+  const diffMs = Math.max(0, nowMs - targetMs);
+  const result = resolveRelativeBucket(diffMs);
+  if (!result) return { value: "just now", suffix: null };
+
+  if (style === "short") {
+    return { value: `${result.value}${result.bucket.shortSuffix}`, suffix: "ago" };
+  }
+
+  const longText = formatLongUnit(result.value, result.bucket.unit);
+  const agoMatch = longText.match(/^(.+)\s+ago$/);
+  if (agoMatch) {
+    return { value: agoMatch[1]!, suffix: "ago" };
+  }
+  return { value: longText, suffix: null };
+}
+
+export function formatRelativeTimeLabel(
+  isoDate: string,
+  style: RelativeTimeStyle = "short",
+): string {
+  const relative = formatRelativeTime(isoDate, Date.now(), style);
   return relative.suffix ? `${relative.value} ${relative.suffix}` : relative.value;
 }
