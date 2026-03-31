@@ -91,7 +91,7 @@ function OpenCommandPaletteDialog() {
   const setOpen = useCommandPaletteStore((store) => store.setOpen);
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
-  const isActionsOnly = query.startsWith(">");
+  const isActionsOnly = deferredQuery.startsWith(">");
   const settings = useSettings();
   const { activeDraftThread, activeThread, handleNewThread } = useHandleNewThread();
   const projects = useStore((store) => store.projects);
