@@ -71,8 +71,8 @@ describe("buildThreadActionItems", () => {
         "thread:thread-older",
         "thread:thread-newer",
       ]);
-      expect(items[0]?.timestamp).toBe("yesterday");
-      expect(items[1]?.timestamp).toBe("5 days ago");
+      expect(items[0]?.timestamp).toBe("1d ago");
+      expect(items[1]?.timestamp).toBe("5d ago");
     } finally {
       vi.useRealTimers();
     }
