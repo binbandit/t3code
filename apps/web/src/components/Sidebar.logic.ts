@@ -1,5 +1,6 @@
 import * as React from "react";
 import type { SidebarProjectSortOrder, SidebarThreadSortOrder } from "@t3tools/contracts/settings";
+import { toSortableTimestamp } from "../lib/threadSort";
 import type { Thread } from "../types";
 import { cn } from "../lib/utils";
 import {
@@ -406,12 +407,6 @@ export function getVisibleThreadsForProject<T extends Pick<Thread, "id">>(input:
     hiddenThreads: threads.filter((thread) => !visibleThreadIds.has(thread.id)),
     visibleThreads: threads.filter((thread) => visibleThreadIds.has(thread.id)),
   };
-}
-
-function toSortableTimestamp(iso: string | undefined): number | null {
-  if (!iso) return null;
-  const ms = Date.parse(iso);
-  return Number.isFinite(ms) ? ms : null;
 }
 
 function getLatestUserMessageTimestamp(thread: SidebarThreadSortInput): number {

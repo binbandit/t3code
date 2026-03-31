@@ -48,7 +48,7 @@ import {
 } from "../../modelSelection";
 import { ensureNativeApi, readNativeApi } from "../../nativeApi";
 import { useStore } from "../../store";
-import { formatRelativeTime, formatRelativeTimeLabel } from "../../timestampFormat";
+import { formatCompactRelativeTime, formatRelativeTimeLabel } from "../../timestampFormat";
 import { cn } from "../../lib/utils";
 import { Button } from "../ui/button";
 import { Collapsible, CollapsibleContent } from "../ui/collapsible";
@@ -194,7 +194,7 @@ function useRelativeTimeTick(intervalMs = 1_000) {
 
 function ProviderLastChecked({ lastCheckedAt }: { lastCheckedAt: string | null }) {
   useRelativeTimeTick();
-  const lastCheckedRelative = lastCheckedAt ? formatRelativeTime(lastCheckedAt) : null;
+  const lastCheckedRelative = lastCheckedAt ? formatCompactRelativeTime(lastCheckedAt) : null;
 
   if (!lastCheckedRelative) {
     return null;

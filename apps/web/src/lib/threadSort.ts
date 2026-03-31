@@ -4,7 +4,7 @@ import type { Thread } from "../types";
 
 type ThreadSortInput = Pick<Thread, "createdAt" | "updatedAt" | "messages">;
 
-function toSortableTimestamp(iso: string | undefined): number | null {
+export function toSortableTimestamp(iso: string | undefined): number | null {
   if (!iso) return null;
   const ms = Date.parse(iso);
   return Number.isFinite(ms) ? ms : null;
