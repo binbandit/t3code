@@ -164,11 +164,11 @@ function OpenCommandPaletteDialog() {
     [handleNewThread, projects, settings.defaultThreadEnvMode],
   );
 
-  const projectLocalThreadItems = useMemo(
+  const projectFreshThreadItems = useMemo(
     () =>
       buildProjectActionItems({
         projects,
-        valuePrefix: "new-local-thread-in",
+        valuePrefix: "new-fresh-thread-in",
         icon: <FolderIcon className={ITEM_ICON_CLASS} />,
         runProject: async (projectId) => {
           await handleNewThread(projectId, {
@@ -254,8 +254,8 @@ function OpenCommandPaletteDialog() {
 
       actionItems.push({
         kind: "action",
-        value: "action:new-local-thread",
-        searchTerms: ["new local thread", "chat", "create", "fresh", "default environment"],
+        value: "action:new-fresh-thread",
+        searchTerms: ["new fresh thread", "chat", "create", "default environment"],
         title: (
           <>
             New fresh thread in <span className="font-semibold">{activeProjectTitle}</span>
@@ -287,20 +287,19 @@ function OpenCommandPaletteDialog() {
 
     actionItems.push({
       kind: "submenu",
-      value: "action:new-local-thread-in",
+      value: "action:new-fresh-thread-in",
       searchTerms: [
-        "new local thread",
+        "new fresh thread",
         "project",
         "pick",
         "choose",
         "select",
-        "fresh",
         "default environment",
       ],
-      title: "New local thread in...",
+      title: "New fresh thread in...",
       icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
       addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
-      groups: [{ value: "projects", label: "Projects", items: projectLocalThreadItems }],
+      groups: [{ value: "projects", label: "Projects", items: projectFreshThreadItems }],
     });
   }
 
