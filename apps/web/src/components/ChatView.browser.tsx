@@ -3877,7 +3877,6 @@ describe("ChatView timeline estimator parity (full app)", () => {
     try {
       const newThreadButton = page.getByTestId("new-thread-button");
       await expect.element(newThreadButton).toBeInTheDocument();
-      await waitForNewThreadShortcutLabel();
       await waitForServerConfigToApply();
       await newThreadButton.click();
 
@@ -3901,6 +3900,9 @@ describe("ChatView timeline estimator parity (full app)", () => {
         },
         { timeout: 8_000, interval: 16 },
       );
+      const composerEditor = await waitForComposerEditor();
+      composerEditor.focus();
+      await waitForLayout();
 
       const freshThreadPath = await triggerChatNewShortcutUntilPath(
         mounted.router,
