@@ -260,13 +260,3 @@ export function getCommandPaletteInputPlaceholder(mode: CommandPaletteMode): str
       return "Search...";
   }
 }
-
-export function getCommandPaletteInputStartAddon(input: {
-  mode: CommandPaletteMode;
-  currentViewAddonIcon: ReactNode | null;
-}): ReactNode | undefined {
-  if (input.mode === "submenu") {
-    return input.currentViewAddonIcon ?? undefined;
-  }
-  return undefined;
-}

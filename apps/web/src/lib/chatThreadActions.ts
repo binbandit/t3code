@@ -24,6 +24,8 @@ interface NewThreadHandler {
   ): Promise<void>;
 }
 
+type NewThreadOptions = NonNullable<Parameters<NewThreadHandler>[1]>;
+
 export interface ChatThreadActionContext {
   readonly activeDraftThread: DraftThreadContextLike | null;
   readonly activeThread: ThreadContextLike | undefined;
@@ -53,6 +55,30 @@ export function resolveThreadActionProjectRef(
     : null;
 }
 
+function buildContextualThreadOptions(context: ChatThreadActionContext): NewThreadOptions {
+  return {
+    branch: context.activeThread?.branch ?? context.activeDraftThread?.branch ?? null,
+    worktreePath:
+      context.activeThread?.worktreePath ?? context.activeDraftThread?.worktreePath ?? null,
+    envMode:
+      context.activeDraftThread?.envMode ??
+      (context.activeThread?.worktreePath ? "worktree" : "local"),
+  };
+}
+
+function buildDefaultThreadOptions(context: ChatThreadActionContext): NewThreadOptions {
+  return {
+    envMode: context.defaultThreadEnvMode,
+  };
+}
+
+export async function startNewThreadInProjectFromContext(
+  context: ChatThreadActionContext,
+  projectRef: ScopedProjectRef,
+): Promise<void> {
+  await context.handleNewThread(projectRef, buildContextualThreadOptions(context));
+}
+
 export async function startNewThreadFromContext(
   context: ChatThreadActionContext,
 ): Promise<boolean> {
@@ -61,14 +87,7 @@ export async function startNewThreadFromContext(
     return false;
   }
 
-  await context.handleNewThread(projectRef, {
-    branch: context.activeThread?.branch ?? context.activeDraftThread?.branch ?? null,
-    worktreePath:
-      context.activeThread?.worktreePath ?? context.activeDraftThread?.worktreePath ?? null,
-    envMode:
-      context.activeDraftThread?.envMode ??
-      (context.activeThread?.worktreePath ? "worktree" : "local"),
-  });
+  await startNewThreadInProjectFromContext(context, projectRef);
   return true;
 }
 
@@ -80,8 +99,6 @@ export async function startNewLocalThreadFromContext(
     return false;
   }
 
-  await context.handleNewThread(projectRef, {
-    envMode: context.defaultThreadEnvMode,
-  });
+  await context.handleNewThread(projectRef, buildDefaultThreadOptions(context));
   return true;
 }

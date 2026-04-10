@@ -26,10 +26,11 @@ import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useSettings } from "../hooks/useSettings";
 import {
   startNewLocalThreadFromContext,
+  startNewThreadInProjectFromContext,
   startNewThreadFromContext,
 } from "../lib/chatThreadActions";
 import { isTerminalFocused } from "../lib/terminalFocus";
-import { sortThreads } from "../lib/threadSort";
+import { getLatestThreadForProject } from "../lib/threadSort";
 import { cn } from "../lib/utils";
 import {
   selectProjectsAcrossEnvironments,
@@ -141,14 +142,11 @@ function OpenCommandPaletteDialog() {
 
   const openProjectFromSearch = useMemo(
     () => async (project: (typeof projects)[number]) => {
-      const latestThread =
-        sortThreads(
-          threads.filter(
-            (thread) =>
-              thread.projectId === project.id && thread.environmentId === project.environmentId,
-          ),
-          settings.sidebarThreadSortOrder,
-        )[0] ?? null;
+      const latestThread = getLatestThreadForProject(
+        threads.filter((thread) => thread.environmentId === project.environmentId),
+        project.id,
+        settings.sidebarThreadSortOrder,
+      );
       if (latestThread) {
         await navigate({
           to: "/$environmentId/$threadId",
@@ -190,12 +188,19 @@ function OpenCommandPaletteDialog() {
         valuePrefix: "new-thread-in",
         icon: <FolderIcon className={ITEM_ICON_CLASS} />,
         runProject: async (project) => {
-          await handleNewThread(scopeProjectRef(project.environmentId, project.id), {
-            envMode: settings.defaultThreadEnvMode,
-          });
+          await startNewThreadInProjectFromContext(
+            {
+              activeDraftThread,
+              activeThread,
+              defaultThreadEnvMode: settings.defaultThreadEnvMode,
+              handleNewThread,
+              projects,
+            },
+            scopeProjectRef(project.environmentId, project.id),
+          );
         },
       }),
-    [handleNewThread, projects, settings.defaultThreadEnvMode],
+    [activeDraftThread, activeThread, handleNewThread, projects, settings.defaultThreadEnvMode],
   );
 
   const projectFreshThreadItems = useMemo(
