@@ -19,6 +19,7 @@ import {
   type KeyboardEvent,
   type ReactNode,
 } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useCommandPaletteStore } from "../commandPaletteStore";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useSettings } from "../hooks/useSettings";
@@ -30,7 +31,7 @@ import { sortThreads } from "../lib/threadSort";
 import { cn } from "../lib/utils";
 import {
   selectProjectsAcrossEnvironments,
-  selectThreadsAcrossEnvironments,
+  selectSidebarThreadsAcrossEnvironments,
   useStore,
 } from "../store";
 import { buildThreadRouteParams } from "../threadRoutes";
@@ -99,8 +100,8 @@ function OpenCommandPaletteDialog() {
   const isActionsOnly = deferredQuery.startsWith(">");
   const settings = useSettings();
   const { activeDraftThread, activeThread, handleNewThread } = useHandleNewThread();
-  const projects = useStore(selectProjectsAcrossEnvironments);
-  const threads = useStore(selectThreadsAcrossEnvironments);
+  const projects = useStore(useShallow(selectProjectsAcrossEnvironments));
+  const threads = useStore(useShallow(selectSidebarThreadsAcrossEnvironments));
   const keybindings = useServerKeybindings();
   const [viewStack, setViewStack] = useState<CommandPaletteView[]>([]);
   const currentView = viewStack.at(-1) ?? null;

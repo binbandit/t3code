@@ -3,7 +3,7 @@ import type { SidebarThreadSortOrder } from "@t3tools/contracts/settings";
 import { type ReactNode } from "react";
 import { sortThreads } from "../lib/threadSort";
 import { formatRelativeTimeLabel } from "../timestampFormat";
-import { type Project, type Thread } from "../types";
+import { type Project, type SidebarThreadSummary, type Thread } from "../types";
 
 export const RECENT_THREAD_LIMIT = 12;
 export const ITEM_ICON_CLASS = "size-4 text-muted-foreground/80";
@@ -71,12 +71,20 @@ export function buildProjectActionItems(input: {
 }
 
 export function buildThreadActionItems(input: {
-  threads: ReadonlyArray<Thread>;
+  threads: ReadonlyArray<
+    Pick<
+      SidebarThreadSummary,
+      "archivedAt" | "branch" | "createdAt" | "environmentId" | "id" | "projectId" | "title"
+    > & {
+      updatedAt?: string | undefined;
+      latestUserMessageAt?: string | null;
+    }
+  >;
   activeThreadId?: Thread["id"];
   projectTitleById: ReadonlyMap<Project["id"], string>;
   sortOrder: SidebarThreadSortOrder;
   icon: ReactNode;
-  runThread: (thread: Thread) => Promise<void>;
+  runThread: (thread: Pick<SidebarThreadSummary, "environmentId" | "id">) => Promise<void>;
   limit?: number;
 }): CommandPaletteActionItem[] {
   const sortedThreads = sortThreads(
