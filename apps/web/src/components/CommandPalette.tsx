@@ -5,6 +5,7 @@ import type { ProjectId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowDownIcon,
+  ArrowLeftIcon,
   ArrowUpIcon,
   FolderIcon,
   MessageSquareIcon,
@@ -27,6 +28,7 @@ import {
   startNewLocalThreadFromContext,
   startNewThreadFromContext,
 } from "../lib/chatThreadActions";
+import { isTerminalFocused } from "../lib/terminalFocus";
 import { sortThreads } from "../lib/threadSort";
 import { cn } from "../lib/utils";
 import {
@@ -45,13 +47,13 @@ import {
   type CommandPaletteView,
   filterCommandPaletteGroups,
   getCommandPaletteInputPlaceholder,
-  getCommandPaletteInputStartAddon,
   getCommandPaletteMode,
   ITEM_ICON_CLASS,
   RECENT_THREAD_LIMIT,
 } from "./CommandPalette.logic";
 import { CommandPaletteResults } from "./CommandPaletteResults";
 import { useServerKeybindings } from "../rpc/serverState";
+import { resolveShortcutCommand } from "../keybindings";
 import {
   Command,
   CommandDialog,
@@ -66,6 +68,28 @@ import { toastManager } from "./ui/toast";
 export function CommandPalette({ children }: { children: ReactNode }) {
   const open = useCommandPaletteStore((store) => store.open);
   const setOpen = useCommandPaletteStore((store) => store.setOpen);
+  const toggleOpen = useCommandPaletteStore((store) => store.toggleOpen);
+  const keybindings = useServerKeybindings();
+
+  useEffect(() => {
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      const command = resolveShortcutCommand(event, keybindings, {
+        context: {
+          terminalFocus: isTerminalFocused(),
+          terminalOpen: false,
+        },
+      });
+      if (command !== "commandPalette.toggle") {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      toggleOpen();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [keybindings, toggleOpen]);
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
@@ -182,11 +206,11 @@ function OpenCommandPaletteDialog() {
         icon: <FolderIcon className={ITEM_ICON_CLASS} />,
         runProject: async (project) => {
           await handleNewThread(scopeProjectRef(project.environmentId, project.id), {
-            envMode: "local",
+            envMode: settings.defaultThreadEnvMode,
           });
         },
       }),
-    [handleNewThread, projects],
+    [handleNewThread, projects, settings.defaultThreadEnvMode],
   );
 
   const allThreadItems = useMemo(
@@ -265,10 +289,11 @@ function OpenCommandPaletteDialog() {
       actionItems.push({
         kind: "action",
         value: "action:new-fresh-thread",
-        searchTerms: ["new fresh thread", "chat", "create", "default environment"],
+        searchTerms: ["new thread", "chat", "create", settings.defaultThreadEnvMode],
         title: (
           <>
-            New fresh thread in <span className="font-semibold">{activeProjectTitle}</span>
+            New {settings.defaultThreadEnvMode} thread in{" "}
+            <span className="font-semibold">{activeProjectTitle}</span>
           </>
         ),
         icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
@@ -299,14 +324,14 @@ function OpenCommandPaletteDialog() {
       kind: "submenu",
       value: "action:new-fresh-thread-in",
       searchTerms: [
-        "new fresh thread",
+        "new thread",
         "project",
         "pick",
         "choose",
         "select",
-        "default environment",
+        settings.defaultThreadEnvMode,
       ],
-      title: "New fresh thread in...",
+      title: `New ${settings.defaultThreadEnvMode} thread in...`,
       icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
       addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
       groups: [{ value: "projects", label: "Projects", items: projectFreshThreadItems }],
@@ -336,10 +361,6 @@ function OpenCommandPaletteDialog() {
   });
 
   const inputPlaceholder = getCommandPaletteInputPlaceholder(paletteMode);
-  const inputStartAddon = getCommandPaletteInputStartAddon({
-    mode: paletteMode,
-    currentViewAddonIcon: currentView?.addonIcon ?? null,
-  });
   const isSubmenu = paletteMode === "submenu";
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
@@ -384,7 +405,25 @@ function OpenCommandPaletteDialog() {
       >
         <CommandInput
           placeholder={inputPlaceholder}
-          startAddon={inputStartAddon}
+          wrapperClassName={
+            isSubmenu
+              ? "[&_[data-slot=autocomplete-start-addon]]:pointer-events-auto [&_[data-slot=autocomplete-start-addon]]:cursor-pointer"
+              : undefined
+          }
+          {...(isSubmenu
+            ? {
+                startAddon: (
+                  <button
+                    type="button"
+                    className="flex cursor-pointer items-center"
+                    aria-label="Back"
+                    onClick={popView}
+                  >
+                    <ArrowLeftIcon />
+                  </button>
+                ),
+              }
+            : {})}
           onKeyDown={handleKeyDown}
         />
         <CommandPanel className="max-h-[min(28rem,70vh)]">

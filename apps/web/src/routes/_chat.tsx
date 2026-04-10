@@ -22,7 +22,6 @@ function ChatRouteGlobalShortcuts() {
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread, routeThreadRef } =
     useHandleNewThread();
   const commandPaletteOpen = useCommandPaletteStore((s) => s.open);
-  const toggleOpen = useCommandPaletteStore((s) => s.toggleOpen);
   const keybindings = useServerKeybindings();
   const terminalOpen = useTerminalStateStore((state) =>
     routeThreadRef
@@ -40,13 +39,6 @@ function ChatRouteGlobalShortcuts() {
           terminalOpen,
         },
       });
-
-      if (command === "commandPalette.toggle") {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleOpen();
-        return;
-      }
 
       if (commandPaletteOpen) {
         return;
@@ -105,7 +97,6 @@ function ChatRouteGlobalShortcuts() {
     routeThreadRef,
     selectedThreadKeysSize,
     terminalOpen,
-    toggleOpen,
     appSettings.defaultThreadEnvMode,
   ]);
 
