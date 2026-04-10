@@ -2,7 +2,7 @@
 
 import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime";
 import type { ProjectId } from "@t3tools/contracts";
-import { useNavigate } from "@tanstack/react-router";
+import { useNavigate, useParams } from "@tanstack/react-router";
 import {
   ArrowDownIcon,
   ArrowLeftIcon,
@@ -37,7 +37,8 @@ import {
   selectSidebarThreadsAcrossEnvironments,
   useStore,
 } from "../store";
-import { buildThreadRouteParams } from "../threadRoutes";
+import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
+import { buildThreadRouteParams, resolveThreadRouteTarget } from "../threadRoutes";
 import {
   ADDON_ICON_CLASS,
   buildProjectActionItems,
@@ -71,6 +72,16 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   const setOpen = useCommandPaletteStore((store) => store.setOpen);
   const toggleOpen = useCommandPaletteStore((store) => store.toggleOpen);
   const keybindings = useServerKeybindings();
+  const routeTarget = useParams({
+    strict: false,
+    select: (params) => resolveThreadRouteTarget(params),
+  });
+  const routeThreadRef = routeTarget?.kind === "server" ? routeTarget.threadRef : null;
+  const terminalOpen = useTerminalStateStore((state) =>
+    routeThreadRef
+      ? selectThreadTerminalState(state.terminalStateByThreadKey, routeThreadRef).terminalOpen
+      : false,
+  );
 
   useEffect(() => {
     const onKeyDown = (event: globalThis.KeyboardEvent) => {
@@ -78,7 +89,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
       const command = resolveShortcutCommand(event, keybindings, {
         context: {
           terminalFocus: isTerminalFocused(),
-          terminalOpen: false,
+          terminalOpen,
         },
       });
       if (command !== "commandPalette.toggle") {
@@ -90,7 +101,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [keybindings, toggleOpen]);
+  }, [keybindings, terminalOpen, toggleOpen]);
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen}>
