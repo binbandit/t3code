@@ -21,7 +21,6 @@ function ChatRouteGlobalShortcuts() {
   const selectedThreadKeysSize = useThreadSelectionStore((state) => state.selectedThreadKeys.size);
   const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread, routeThreadRef } =
     useHandleNewThread();
-  const commandPaletteOpen = useCommandPaletteStore((s) => s.open);
   const keybindings = useServerKeybindings();
   const terminalOpen = useTerminalStateStore((state) =>
     routeThreadRef
@@ -40,7 +39,7 @@ function ChatRouteGlobalShortcuts() {
         },
       });
 
-      if (commandPaletteOpen) {
+      if (useCommandPaletteStore.getState().open) {
         return;
       }
 
@@ -90,7 +89,6 @@ function ChatRouteGlobalShortcuts() {
     activeDraftThread,
     activeThread,
     clearSelection,
-    commandPaletteOpen,
     handleNewThread,
     keybindings,
     defaultProjectRef,
