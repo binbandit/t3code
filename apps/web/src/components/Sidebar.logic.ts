@@ -443,12 +443,6 @@ export function getVisibleThreadsForProject<T extends Pick<Thread, "id">>(input:
   };
 }
 
-export function sortThreadsForSidebar<
-  T extends Pick<Thread, "id" | "createdAt" | "updatedAt"> & ThreadSortInput,
->(threads: readonly T[], sortOrder: SidebarThreadSortOrder): T[] {
-  return sortThreads(threads, sortOrder);
-}
-
 export function getFallbackThreadIdAfterDelete<
   T extends Pick<Thread, "id" | "projectId" | "createdAt" | "updatedAt"> & ThreadSortInput,
 >(input: {

@@ -17,9 +17,9 @@ import {
   resolveThreadStatusPill,
   shouldClearThreadSelectionOnMouseDown,
   sortProjectsForSidebar,
-  sortThreadsForSidebar,
   THREAD_JUMP_HINT_SHOW_DELAY_MS,
 } from "./Sidebar.logic";
+import { sortThreads } from "../lib/threadSort";
 import { EnvironmentId, OrchestrationLatestTurn, ProjectId, ThreadId } from "@t3tools/contracts";
 import {
   DEFAULT_INTERACTION_MODE,
@@ -667,9 +667,9 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
   };
 }
 
-describe("sortThreadsForSidebar", () => {
+describe("sortThreads", () => {
   it("sorts threads by the latest user message in recency mode", () => {
-    const sorted = sortThreadsForSidebar(
+    const sorted = sortThreads(
       [
         makeThread({
           id: ThreadId.make("thread-1"),
@@ -712,7 +712,7 @@ describe("sortThreadsForSidebar", () => {
   });
 
   it("falls back to thread timestamps when there is no user message", () => {
-    const sorted = sortThreadsForSidebar(
+    const sorted = sortThreads(
       [
         makeThread({
           id: ThreadId.make("thread-1"),
@@ -746,7 +746,7 @@ describe("sortThreadsForSidebar", () => {
   });
 
   it("falls back to id ordering when threads have no sortable timestamps", () => {
-    const sorted = sortThreadsForSidebar(
+    const sorted = sortThreads(
       [
         makeThread({
           id: ThreadId.make("thread-1"),
@@ -771,7 +771,7 @@ describe("sortThreadsForSidebar", () => {
   });
 
   it("can sort threads by createdAt when configured", () => {
-    const sorted = sortThreadsForSidebar(
+    const sorted = sortThreads(
       [
         makeThread({
           id: ThreadId.make("thread-1"),
