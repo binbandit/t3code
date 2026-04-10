@@ -1,36 +1,32 @@
-import { type ResolvedKeybindingsConfig } from "@t3tools/contracts";
-import { useQuery } from "@tanstack/react-query";
-import { Outlet, createFileRoute } from "@tanstack/react-router";
+import { scopeProjectRef } from "@t3tools/client-runtime";
+import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect } from "react";
 
 import { useCommandPaletteStore } from "../commandPaletteStore";
-import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import {
-  resolveThreadActionProjectId,
-  startNewLocalThreadFromContext,
-  startNewThreadFromContext,
-} from "../lib/chatThreadActions";
+  ensurePrimaryEnvironmentReady,
+  resolveInitialServerAuthGateState,
+} from "../environments/primary";
+import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { isTerminalFocused } from "../lib/terminalFocus";
-import { serverConfigQueryOptions } from "../lib/serverReactQuery";
 import { resolveShortcutCommand } from "../keybindings";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
 import { useThreadSelectionStore } from "../threadSelectionStore";
+import { resolveSidebarNewThreadEnvMode } from "~/components/Sidebar.logic";
 import { useSettings } from "~/hooks/useSettings";
-
-const EMPTY_KEYBINDINGS: ResolvedKeybindingsConfig = [];
+import { useServerKeybindings } from "~/rpc/serverState";
 
 function ChatRouteGlobalShortcuts() {
   const clearSelection = useThreadSelectionStore((state) => state.clearSelection);
-  const selectedThreadIdsSize = useThreadSelectionStore((state) => state.selectedThreadIds.size);
-  const { activeDraftThread, activeThread, defaultProjectId, handleNewThread, routeThreadId } =
+  const selectedThreadKeysSize = useThreadSelectionStore((state) => state.selectedThreadKeys.size);
+  const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread, routeThreadRef } =
     useHandleNewThread();
   const commandPaletteOpen = useCommandPaletteStore((s) => s.open);
   const toggleOpen = useCommandPaletteStore((s) => s.toggleOpen);
-  const serverConfigQuery = useQuery(serverConfigQueryOptions());
-  const keybindings = serverConfigQuery.data?.keybindings ?? EMPTY_KEYBINDINGS;
+  const keybindings = useServerKeybindings();
   const terminalOpen = useTerminalStateStore((state) =>
-    routeThreadId
-      ? selectThreadTerminalState(state.terminalStateByThreadId, routeThreadId).terminalOpen
+    routeThreadRef
+      ? selectThreadTerminalState(state.terminalStateByThreadKey, routeThreadRef).terminalOpen
       : false,
   );
   const appSettings = useSettings();
@@ -38,7 +34,6 @@ function ChatRouteGlobalShortcuts() {
   useEffect(() => {
     const onWindowKeyDown = (event: KeyboardEvent) => {
       if (event.defaultPrevented) return;
-
       const command = resolveShortcutCommand(event, keybindings, {
         context: {
           terminalFocus: isTerminalFocused(),
@@ -57,38 +52,42 @@ function ChatRouteGlobalShortcuts() {
         return;
       }
 
-      if (event.key === "Escape" && selectedThreadIdsSize > 0) {
+      if (event.key === "Escape" && selectedThreadKeysSize > 0) {
         event.preventDefault();
         clearSelection();
         return;
       }
 
-      if (command !== "chat.new" && command !== "chat.newLocal") {
-        return;
-      }
-
-      const threadActionContext = {
-        activeDraftThread,
-        activeThread,
-        defaultThreadEnvMode: appSettings.defaultThreadEnvMode,
-        handleNewThread,
-        projects: defaultProjectId ? [{ id: defaultProjectId }] : [],
-      };
-
-      if (!resolveThreadActionProjectId(threadActionContext)) {
+      const projectRef = activeThread
+        ? scopeProjectRef(activeThread.environmentId, activeThread.projectId)
+        : activeDraftThread && routeThreadRef
+          ? scopeProjectRef(routeThreadRef.environmentId, activeDraftThread.projectId)
+          : defaultProjectRef;
+      if (!projectRef) {
         return;
       }
 
       if (command === "chat.newLocal") {
         event.preventDefault();
         event.stopPropagation();
-        void startNewLocalThreadFromContext(threadActionContext);
+        void handleNewThread(projectRef, {
+          envMode: resolveSidebarNewThreadEnvMode({
+            defaultEnvMode: appSettings.defaultThreadEnvMode,
+          }),
+        });
         return;
       }
 
-      event.preventDefault();
-      event.stopPropagation();
-      void startNewThreadFromContext(threadActionContext);
+      if (command === "chat.new") {
+        event.preventDefault();
+        event.stopPropagation();
+        void handleNewThread(projectRef, {
+          branch: activeThread?.branch ?? activeDraftThread?.branch ?? null,
+          worktreePath: activeThread?.worktreePath ?? activeDraftThread?.worktreePath ?? null,
+          envMode:
+            activeDraftThread?.envMode ?? (activeThread?.worktreePath ? "worktree" : "local"),
+        });
+      }
     };
 
     window.addEventListener("keydown", onWindowKeyDown);
@@ -102,8 +101,9 @@ function ChatRouteGlobalShortcuts() {
     commandPaletteOpen,
     handleNewThread,
     keybindings,
-    defaultProjectId,
-    selectedThreadIdsSize,
+    defaultProjectRef,
+    routeThreadRef,
+    selectedThreadKeysSize,
     terminalOpen,
     toggleOpen,
     appSettings.defaultThreadEnvMode,
@@ -122,5 +122,14 @@ function ChatRouteLayout() {
 }
 
 export const Route = createFileRoute("/_chat")({
+  beforeLoad: async () => {
+    const [, authGateState] = await Promise.all([
+      ensurePrimaryEnvironmentReady(),
+      resolveInitialServerAuthGateState(),
+    ]);
+    if (authGateState.status !== "authenticated") {
+      throw redirect({ to: "/pair", replace: true });
+    }
+  },
   component: ChatRouteLayout,
 });

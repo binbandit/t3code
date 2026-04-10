@@ -44,6 +44,7 @@ function mockHandle(result: { stdout: string; stderr: string; code: number }) {
     exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(result.code)),
     isRunning: Effect.succeed(false),
     kill: () => Effect.void,
+    unref: Effect.succeed(Effect.void),
     stdin: Sink.drain,
     stdout: Stream.make(encoder.encode(result.stdout)),
     stderr: Stream.make(encoder.encode(result.stderr)),
@@ -115,7 +116,9 @@ function makeMutableServerSettingsService(
           yield* PubSub.publish(changes, next);
           return next;
         }),
-      streamChanges: Stream.fromPubSub(changes),
+      get streamChanges() {
+        return Stream.fromPubSub(changes);
+      },
     } satisfies ServerSettingsShape;
   });
 }

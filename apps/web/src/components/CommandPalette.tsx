@@ -1,7 +1,7 @@
 "use client";
 
+import { scopeProjectRef, scopeThreadRef } from "@t3tools/client-runtime";
 import type { ProjectId } from "@t3tools/contracts";
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowDownIcon,
@@ -26,10 +26,14 @@ import {
   startNewLocalThreadFromContext,
   startNewThreadFromContext,
 } from "../lib/chatThreadActions";
-import { serverConfigQueryOptions } from "../lib/serverReactQuery";
-import { getLatestThreadForProject } from "../lib/threadSort";
+import { sortThreads } from "../lib/threadSort";
 import { cn } from "../lib/utils";
-import { useStore } from "../store";
+import {
+  selectProjectsAcrossEnvironments,
+  selectThreadsAcrossEnvironments,
+  useStore,
+} from "../store";
+import { buildThreadRouteParams } from "../threadRoutes";
 import {
   ADDON_ICON_CLASS,
   buildProjectActionItems,
@@ -46,6 +50,7 @@ import {
   RECENT_THREAD_LIMIT,
 } from "./CommandPalette.logic";
 import { CommandPaletteResults } from "./CommandPaletteResults";
+import { useServerKeybindings } from "../rpc/serverState";
 import {
   Command,
   CommandDialog,
@@ -94,10 +99,9 @@ function OpenCommandPaletteDialog() {
   const isActionsOnly = deferredQuery.startsWith(">");
   const settings = useSettings();
   const { activeDraftThread, activeThread, handleNewThread } = useHandleNewThread();
-  const projects = useStore((store) => store.projects);
-  const threads = useStore((store) => store.threads);
-  const serverConfigQuery = useQuery(serverConfigQueryOptions());
-  const keybindings = serverConfigQuery.data?.keybindings ?? [];
+  const projects = useStore(selectProjectsAcrossEnvironments);
+  const threads = useStore(selectThreadsAcrossEnvironments);
+  const keybindings = useServerKeybindings();
   const [viewStack, setViewStack] = useState<CommandPaletteView[]>([]);
   const currentView = viewStack.at(-1) ?? null;
   const paletteMode = getCommandPaletteMode({ currentView });
@@ -111,21 +115,26 @@ function OpenCommandPaletteDialog() {
   const currentProjectId = activeThread?.projectId ?? activeDraftThread?.projectId ?? null;
 
   const openProjectFromSearch = useMemo(
-    () => async (projectId: (typeof projects)[number]["id"]) => {
-      const latestThread = getLatestThreadForProject(
-        threads,
-        projectId,
-        settings.sidebarThreadSortOrder,
-      );
+    () => async (project: (typeof projects)[number]) => {
+      const latestThread =
+        sortThreads(
+          threads.filter(
+            (thread) =>
+              thread.projectId === project.id && thread.environmentId === project.environmentId,
+          ),
+          settings.sidebarThreadSortOrder,
+        )[0] ?? null;
       if (latestThread) {
         await navigate({
-          to: "/$threadId",
-          params: { threadId: latestThread.id },
+          to: "/$environmentId/$threadId",
+          params: buildThreadRouteParams(
+            scopeThreadRef(latestThread.environmentId, latestThread.id),
+          ),
         });
         return;
       }
 
-      await handleNewThread(projectId, {
+      await handleNewThread(scopeProjectRef(project.environmentId, project.id), {
         envMode: settings.defaultThreadEnvMode,
       });
     },
@@ -155,8 +164,8 @@ function OpenCommandPaletteDialog() {
         projects,
         valuePrefix: "new-thread-in",
         icon: <FolderIcon className={ITEM_ICON_CLASS} />,
-        runProject: async (projectId) => {
-          await handleNewThread(projectId, {
+        runProject: async (project) => {
+          await handleNewThread(scopeProjectRef(project.environmentId, project.id), {
             envMode: settings.defaultThreadEnvMode,
           });
         },
@@ -170,8 +179,8 @@ function OpenCommandPaletteDialog() {
         projects,
         valuePrefix: "new-fresh-thread-in",
         icon: <FolderIcon className={ITEM_ICON_CLASS} />,
-        runProject: async (projectId) => {
-          await handleNewThread(projectId, {
+        runProject: async (project) => {
+          await handleNewThread(scopeProjectRef(project.environmentId, project.id), {
             envMode: "local",
           });
         },
@@ -187,10 +196,10 @@ function OpenCommandPaletteDialog() {
         projectTitleById,
         sortOrder: settings.sidebarThreadSortOrder,
         icon: <MessageSquareIcon className={ITEM_ICON_CLASS} />,
-        runThread: async (threadId) => {
+        runThread: async (thread) => {
           await navigate({
-            to: "/$threadId",
-            params: { threadId },
+            to: "/$environmentId/$threadId",
+            params: buildThreadRouteParams(scopeThreadRef(thread.environmentId, thread.id)),
           });
         },
       }),

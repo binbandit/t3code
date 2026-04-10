@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ProjectId, ThreadId } from "@t3tools/contracts";
+import { EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import type { Thread } from "../types";
 import {
   buildThreadActionItems,
@@ -7,64 +7,59 @@ import {
   type CommandPaletteGroup,
 } from "./CommandPalette.logic";
 
+const LOCAL_ENVIRONMENT_ID = EnvironmentId.make("environment-local");
+const PROJECT_ID = ProjectId.make("project-1");
+
+function makeThread(overrides: Partial<Thread> = {}): Thread {
+  return {
+    id: ThreadId.make("thread-1"),
+    environmentId: LOCAL_ENVIRONMENT_ID,
+    codexThreadId: null,
+    projectId: PROJECT_ID,
+    title: "Thread",
+    modelSelection: { provider: "codex", model: "gpt-5" },
+    runtimeMode: "full-access",
+    interactionMode: "default",
+    session: null,
+    messages: [],
+    proposedPlans: [],
+    error: null,
+    createdAt: "2026-03-01T00:00:00.000Z",
+    archivedAt: null,
+    updatedAt: "2026-03-01T00:00:00.000Z",
+    latestTurn: null,
+    branch: null,
+    worktreePath: null,
+    turnDiffSummaries: [],
+    activities: [],
+    ...overrides,
+  };
+}
+
 describe("buildThreadActionItems", () => {
   it("orders threads by most recent activity and formats timestamps from updatedAt", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-25T12:00:00.000Z"));
 
     try {
-      const projectId = ProjectId.makeUnsafe("project-1");
-      const threads = [
-        {
-          id: ThreadId.makeUnsafe("thread-older"),
-          codexThreadId: null,
-          projectId,
-          title: "Older thread",
-          modelSelection: { provider: "codex", model: "gpt-5" },
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          session: null,
-          messages: [],
-          proposedPlans: [],
-          error: null,
-          createdAt: "2026-03-01T00:00:00.000Z",
-          archivedAt: null,
-          updatedAt: "2026-03-24T12:00:00.000Z",
-          latestTurn: null,
-          branch: null,
-          worktreePath: null,
-          turnDiffSummaries: [],
-          activities: [],
-        },
-        {
-          id: ThreadId.makeUnsafe("thread-newer"),
-          codexThreadId: null,
-          projectId,
-          title: "Newer thread",
-          modelSelection: { provider: "codex", model: "gpt-5" },
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          session: null,
-          messages: [],
-          proposedPlans: [],
-          error: null,
-          createdAt: "2026-03-20T00:00:00.000Z",
-          archivedAt: null,
-          updatedAt: "2026-03-20T00:00:00.000Z",
-          latestTurn: null,
-          branch: null,
-          worktreePath: null,
-          turnDiffSummaries: [],
-          activities: [],
-        },
-      ] satisfies Thread[];
-
       const items = buildThreadActionItems({
-        threads,
-        projectTitleById: new Map([[projectId, "Project"]]),
+        threads: [
+          makeThread({
+            id: ThreadId.make("thread-older"),
+            title: "Older thread",
+            updatedAt: "2026-03-24T12:00:00.000Z",
+          }),
+          makeThread({
+            id: ThreadId.make("thread-newer"),
+            title: "Newer thread",
+            createdAt: "2026-03-20T00:00:00.000Z",
+            updatedAt: "2026-03-20T00:00:00.000Z",
+          }),
+        ],
+        projectTitleById: new Map([[PROJECT_ID, "Project"]]),
         sortOrder: "updated_at",
         icon: null,
-        runThread: async (_threadId) => undefined,
+        runThread: async (_thread) => undefined,
       });
 
       expect(items.map((item) => item.value)).toEqual([
@@ -79,56 +74,24 @@ describe("buildThreadActionItems", () => {
   });
 
   it("ranks thread title matches ahead of contextual project-name matches", () => {
-    const projectId = ProjectId.makeUnsafe("project-1");
     const threadItems = buildThreadActionItems({
       threads: [
-        {
-          id: ThreadId.makeUnsafe("thread-context-match"),
-          codexThreadId: null,
-          projectId,
+        makeThread({
+          id: ThreadId.make("thread-context-match"),
           title: "Fix navbar spacing",
-          modelSelection: { provider: "codex", model: "gpt-5" },
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          session: null,
-          messages: [],
-          proposedPlans: [],
-          error: null,
-          createdAt: "2026-03-01T00:00:00.000Z",
-          archivedAt: null,
           updatedAt: "2026-03-20T00:00:00.000Z",
-          latestTurn: null,
-          branch: null,
-          worktreePath: null,
-          turnDiffSummaries: [],
-          activities: [],
-        },
-        {
-          id: ThreadId.makeUnsafe("thread-title-match"),
-          codexThreadId: null,
-          projectId,
+        }),
+        makeThread({
+          id: ThreadId.make("thread-title-match"),
           title: "Project kickoff notes",
-          modelSelection: { provider: "codex", model: "gpt-5" },
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          session: null,
-          messages: [],
-          proposedPlans: [],
-          error: null,
           createdAt: "2026-03-02T00:00:00.000Z",
-          archivedAt: null,
           updatedAt: "2026-03-19T00:00:00.000Z",
-          latestTurn: null,
-          branch: null,
-          worktreePath: null,
-          turnDiffSummaries: [],
-          activities: [],
-        },
-      ] satisfies Thread[],
-      projectTitleById: new Map([[projectId, "Project"]]),
+        }),
+      ],
+      projectTitleById: new Map([[PROJECT_ID, "Project"]]),
       sortOrder: "updated_at",
       icon: null,
-      runThread: async (_threadId) => undefined,
+      runThread: async (_thread) => undefined,
     });
 
     const groups = filterCommandPaletteGroups({
@@ -177,56 +140,25 @@ describe("buildThreadActionItems", () => {
   });
 
   it("filters archived threads out of thread search items", () => {
-    const projectId = ProjectId.makeUnsafe("project-1");
     const items = buildThreadActionItems({
       threads: [
-        {
-          id: ThreadId.makeUnsafe("thread-active"),
-          codexThreadId: null,
-          projectId,
+        makeThread({
+          id: ThreadId.make("thread-active"),
           title: "Active thread",
-          modelSelection: { provider: "codex", model: "gpt-5" },
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          session: null,
-          messages: [],
-          proposedPlans: [],
-          error: null,
           createdAt: "2026-03-02T00:00:00.000Z",
-          archivedAt: null,
           updatedAt: "2026-03-19T00:00:00.000Z",
-          latestTurn: null,
-          branch: null,
-          worktreePath: null,
-          turnDiffSummaries: [],
-          activities: [],
-        },
-        {
-          id: ThreadId.makeUnsafe("thread-archived"),
-          codexThreadId: null,
-          projectId,
+        }),
+        makeThread({
+          id: ThreadId.make("thread-archived"),
           title: "Archived thread",
-          modelSelection: { provider: "codex", model: "gpt-5" },
-          runtimeMode: "full-access",
-          interactionMode: "default",
-          session: null,
-          messages: [],
-          proposedPlans: [],
-          error: null,
-          createdAt: "2026-03-01T00:00:00.000Z",
           archivedAt: "2026-03-20T00:00:00.000Z",
           updatedAt: "2026-03-20T00:00:00.000Z",
-          latestTurn: null,
-          branch: null,
-          worktreePath: null,
-          turnDiffSummaries: [],
-          activities: [],
-        },
-      ] satisfies Thread[],
-      projectTitleById: new Map([[projectId, "Project"]]),
+        }),
+      ],
+      projectTitleById: new Map([[PROJECT_ID, "Project"]]),
       sortOrder: "updated_at",
       icon: null,
-      runThread: async (_threadId) => undefined,
+      runThread: async (_thread) => undefined,
     });
 
     expect(items.map((item) => item.value)).toEqual(["thread:thread-active"]);

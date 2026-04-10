@@ -9,6 +9,7 @@
 import {
   KeybindingRule,
   KeybindingsConfig,
+  KeybindingsConfigError,
   KeybindingShortcut,
   KeybindingWhenNode,
   MAX_KEYBINDINGS_COUNT,
@@ -38,26 +39,13 @@ import {
   SchemaIssue,
   SchemaTransformation,
   Ref,
-  ServiceMap,
+  Context,
   Scope,
   Stream,
 } from "effect";
 import * as Semaphore from "effect/Semaphore";
 import { ServerConfig } from "./config";
 import { fromLenientJson } from "@t3tools/shared/schemaJson";
-
-export class KeybindingsConfigError extends Schema.TaggedErrorClass<KeybindingsConfigError>()(
-  "KeybindingsConfigParseError",
-  {
-    configPath: Schema.String,
-    detail: Schema.String,
-    cause: Schema.optional(Schema.Defect),
-  },
-) {
-  override get message(): string {
-    return `Unable to parse keybindings config at ${this.configPath}: ${this.detail}`;
-  }
-}
 
 type WhenToken =
   | { type: "identifier"; value: string }
@@ -335,7 +323,7 @@ export const ResolvedKeybindingFromConfig = KeybindingRule.pipe(
             Predicate.isNotNull,
             () =>
               new SchemaIssue.InvalidValue(Option.some(rule), {
-                title: "Invalid keybinding rule",
+                message: "Invalid keybinding rule",
               }),
           ),
           Effect.map((resolved) => resolved),
@@ -347,7 +335,7 @@ export const ResolvedKeybindingFromConfig = KeybindingRule.pipe(
           if (!key) {
             return yield* Effect.fail(
               new SchemaIssue.InvalidValue(Option.some(resolved), {
-                title: "Resolved shortcut cannot be encoded to key string",
+                message: "Resolved shortcut cannot be encoded to key string",
               }),
             );
           }
@@ -534,7 +522,7 @@ export interface KeybindingsShape {
 /**
  * Keybindings - Service tag for keybinding configuration operations.
  */
-export class Keybindings extends ServiceMap.Service<Keybindings, KeybindingsShape>()(
+export class Keybindings extends Context.Service<Keybindings, KeybindingsShape>()(
   "t3/keybindings",
 ) {}
 

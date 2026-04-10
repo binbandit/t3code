@@ -55,17 +55,17 @@ export function buildProjectActionItems(input: {
   projects: ReadonlyArray<Project>;
   valuePrefix: string;
   icon: ReactNode;
-  runProject: (projectId: Project["id"]) => Promise<void>;
+  runProject: (project: Project) => Promise<void>;
 }): CommandPaletteActionItem[] {
   return input.projects.map((project) => ({
     kind: "action",
-    value: `${input.valuePrefix}:${project.id}`,
+    value: `${input.valuePrefix}:${project.environmentId}:${project.id}`,
     searchTerms: [project.name, project.cwd],
     title: project.name,
     description: project.cwd,
     icon: input.icon,
     run: async () => {
-      await input.runProject(project.id);
+      await input.runProject(project);
     },
   }));
 }
@@ -76,7 +76,7 @@ export function buildThreadActionItems(input: {
   projectTitleById: ReadonlyMap<Project["id"], string>;
   sortOrder: SidebarThreadSortOrder;
   icon: ReactNode;
-  runThread: (threadId: Thread["id"]) => Promise<void>;
+  runThread: (thread: Thread) => Promise<void>;
   limit?: number;
 }): CommandPaletteActionItem[] {
   const sortedThreads = sortThreads(
@@ -109,7 +109,7 @@ export function buildThreadActionItems(input: {
       timestamp: formatRelativeTimeLabel(thread.updatedAt ?? thread.createdAt),
       icon: input.icon,
       run: async () => {
-        await input.runThread(thread.id);
+        await input.runThread(thread);
       },
     };
   });

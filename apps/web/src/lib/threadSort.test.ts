@@ -1,13 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_RUNTIME_MODE, ProjectId, ThreadId } from "@t3tools/contracts";
+import { DEFAULT_RUNTIME_MODE, EnvironmentId, ProjectId, ThreadId } from "@t3tools/contracts";
 import type { Thread } from "../types";
 import { getLatestThreadForProject, sortThreads } from "./threadSort";
 
+const LOCAL_ENVIRONMENT_ID = EnvironmentId.make("environment-local");
+const PROJECT_ID = ProjectId.make("project-1");
+
 function makeThread(overrides: Partial<Thread> = {}): Thread {
   return {
-    id: ThreadId.makeUnsafe("thread-1"),
+    id: ThreadId.make("thread-1"),
+    environmentId: LOCAL_ENVIRONMENT_ID,
     codexThreadId: null,
-    projectId: ProjectId.makeUnsafe("project-1"),
+    projectId: PROJECT_ID,
     title: "Thread",
     modelSelection: { provider: "codex", model: "gpt-5.4" },
     runtimeMode: DEFAULT_RUNTIME_MODE,
@@ -33,8 +37,7 @@ describe("sortThreads", () => {
     const sorted = sortThreads(
       [
         makeThread({
-          id: ThreadId.makeUnsafe("thread-1"),
-          createdAt: "2026-03-09T10:00:00.000Z",
+          id: ThreadId.make("thread-1"),
           updatedAt: "2026-03-09T10:10:00.000Z",
           messages: [
             {
@@ -48,7 +51,7 @@ describe("sortThreads", () => {
           ],
         }),
         makeThread({
-          id: ThreadId.makeUnsafe("thread-2"),
+          id: ThreadId.make("thread-2"),
           createdAt: "2026-03-09T10:05:00.000Z",
           updatedAt: "2026-03-09T10:05:00.000Z",
           messages: [
@@ -67,8 +70,8 @@ describe("sortThreads", () => {
     );
 
     expect(sorted.map((thread) => thread.id)).toEqual([
-      ThreadId.makeUnsafe("thread-2"),
-      ThreadId.makeUnsafe("thread-1"),
+      ThreadId.make("thread-2"),
+      ThreadId.make("thread-1"),
     ]);
   });
 
@@ -76,8 +79,7 @@ describe("sortThreads", () => {
     const sorted = sortThreads(
       [
         makeThread({
-          id: ThreadId.makeUnsafe("thread-1"),
-          createdAt: "2026-03-09T10:00:00.000Z",
+          id: ThreadId.make("thread-1"),
           updatedAt: "2026-03-09T10:01:00.000Z",
           messages: [
             {
@@ -91,7 +93,7 @@ describe("sortThreads", () => {
           ],
         }),
         makeThread({
-          id: ThreadId.makeUnsafe("thread-2"),
+          id: ThreadId.make("thread-2"),
           createdAt: "2026-03-09T10:05:00.000Z",
           updatedAt: "2026-03-09T10:05:00.000Z",
           messages: [],
@@ -101,8 +103,8 @@ describe("sortThreads", () => {
     );
 
     expect(sorted.map((thread) => thread.id)).toEqual([
-      ThreadId.makeUnsafe("thread-2"),
-      ThreadId.makeUnsafe("thread-1"),
+      ThreadId.make("thread-2"),
+      ThreadId.make("thread-1"),
     ]);
   });
 
@@ -110,13 +112,13 @@ describe("sortThreads", () => {
     const sorted = sortThreads(
       [
         makeThread({
-          id: ThreadId.makeUnsafe("thread-1"),
+          id: ThreadId.make("thread-1"),
           createdAt: "" as never,
           updatedAt: undefined,
           messages: [],
         }),
         makeThread({
-          id: ThreadId.makeUnsafe("thread-2"),
+          id: ThreadId.make("thread-2"),
           createdAt: "" as never,
           updatedAt: undefined,
           messages: [],
@@ -126,8 +128,8 @@ describe("sortThreads", () => {
     );
 
     expect(sorted.map((thread) => thread.id)).toEqual([
-      ThreadId.makeUnsafe("thread-2"),
-      ThreadId.makeUnsafe("thread-1"),
+      ThreadId.make("thread-2"),
+      ThreadId.make("thread-1"),
     ]);
   });
 
@@ -135,12 +137,12 @@ describe("sortThreads", () => {
     const sorted = sortThreads(
       [
         makeThread({
-          id: ThreadId.makeUnsafe("thread-1"),
+          id: ThreadId.make("thread-1"),
           createdAt: "2026-03-09T10:05:00.000Z",
           updatedAt: "2026-03-09T10:05:00.000Z",
         }),
         makeThread({
-          id: ThreadId.makeUnsafe("thread-2"),
+          id: ThreadId.make("thread-2"),
           createdAt: "2026-03-09T10:00:00.000Z",
           updatedAt: "2026-03-09T10:10:00.000Z",
         }),
@@ -149,42 +151,37 @@ describe("sortThreads", () => {
     );
 
     expect(sorted.map((thread) => thread.id)).toEqual([
-      ThreadId.makeUnsafe("thread-1"),
-      ThreadId.makeUnsafe("thread-2"),
+      ThreadId.make("thread-1"),
+      ThreadId.make("thread-2"),
     ]);
   });
 
   it("returns the latest active thread for a project", () => {
-    const projectId = ProjectId.makeUnsafe("project-1");
-
     const latestThread = getLatestThreadForProject(
       [
         makeThread({
-          id: ThreadId.makeUnsafe("thread-1"),
-          projectId,
+          id: ThreadId.make("thread-1"),
           createdAt: "2026-03-09T10:00:00.000Z",
           updatedAt: "2026-03-09T10:01:00.000Z",
           archivedAt: null,
         }),
         makeThread({
-          id: ThreadId.makeUnsafe("thread-2"),
-          projectId,
+          id: ThreadId.make("thread-2"),
           createdAt: "2026-03-09T10:05:00.000Z",
           updatedAt: "2026-03-09T10:10:00.000Z",
           archivedAt: "2026-03-10T00:00:00.000Z",
         }),
         makeThread({
-          id: ThreadId.makeUnsafe("thread-3"),
-          projectId,
+          id: ThreadId.make("thread-3"),
           createdAt: "2026-03-09T10:06:00.000Z",
           updatedAt: "2026-03-09T10:06:00.000Z",
           archivedAt: null,
         }),
       ],
-      projectId,
+      PROJECT_ID,
       "updated_at",
     );
 
-    expect(latestThread?.id).toBe(ThreadId.makeUnsafe("thread-3"));
+    expect(latestThread?.id).toBe(ThreadId.make("thread-3"));
   });
 });

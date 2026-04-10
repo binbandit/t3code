@@ -24,7 +24,16 @@ import {
 } from "../providerSnapshot";
 import { makeManagedServerProvider } from "../makeManagedServerProvider";
 import { ClaudeProvider } from "../Services/ClaudeProvider";
-import { ServerSettingsError, ServerSettingsService } from "../../serverSettings";
+import { ServerSettingsService } from "../../serverSettings";
+import { ServerSettingsError } from "@t3tools/contracts";
+
+const DEFAULT_CLAUDE_MODEL_CAPABILITIES: ModelCapabilities = {
+  reasoningEffortLevels: [],
+  supportsFastMode: false,
+  supportsThinkingToggle: false,
+  contextWindowOptions: [],
+  promptInjectedEffortLevels: [],
+};
 
 const PROVIDER = "claudeAgent" as const;
 const BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
@@ -86,13 +95,8 @@ const BUILT_IN_MODELS: ReadonlyArray<ServerProviderModel> = [
 export function getClaudeModelCapabilities(model: string | null | undefined): ModelCapabilities {
   const slug = model?.trim();
   return (
-    BUILT_IN_MODELS.find((candidate) => candidate.slug === slug)?.capabilities ?? {
-      reasoningEffortLevels: [],
-      supportsFastMode: false,
-      supportsThinkingToggle: false,
-      contextWindowOptions: [],
-      promptInjectedEffortLevels: [],
-    }
+    BUILT_IN_MODELS.find((candidate) => candidate.slug === slug)?.capabilities ??
+    DEFAULT_CLAUDE_MODEL_CAPABILITIES
   );
 }
 
@@ -426,17 +430,16 @@ const probeClaudeCapabilities = (binaryPath: string) => {
   );
 };
 
-const runClaudeCommand = (args: ReadonlyArray<string>) =>
-  Effect.gen(function* () {
-    const claudeSettings = yield* Effect.service(ServerSettingsService).pipe(
-      Effect.flatMap((service) => service.getSettings),
-      Effect.map((settings) => settings.providers.claudeAgent),
-    );
-    const command = ChildProcess.make(claudeSettings.binaryPath, [...args], {
-      shell: process.platform === "win32",
-    });
-    return yield* spawnAndCollect(claudeSettings.binaryPath, command);
+const runClaudeCommand = Effect.fn("runClaudeCommand")(function* (args: ReadonlyArray<string>) {
+  const claudeSettings = yield* Effect.service(ServerSettingsService).pipe(
+    Effect.flatMap((service) => service.getSettings),
+    Effect.map((settings) => settings.providers.claudeAgent),
+  );
+  const command = ChildProcess.make(claudeSettings.binaryPath, [...args], {
+    shell: process.platform === "win32",
   });
+  return yield* spawnAndCollect(claudeSettings.binaryPath, command);
+});
 
 export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(function* (
   resolveSubscriptionType?: (binaryPath: string) => Effect.Effect<string | undefined>,
@@ -450,7 +453,12 @@ export const checkClaudeProviderStatus = Effect.fn("checkClaudeProviderStatus")(
     Effect.map((settings) => settings.providers.claudeAgent),
   );
   const checkedAt = new Date().toISOString();
-  const models = providerModelsFromSettings(BUILT_IN_MODELS, PROVIDER, claudeSettings.customModels);
+  const models = providerModelsFromSettings(
+    BUILT_IN_MODELS,
+    PROVIDER,
+    claudeSettings.customModels,
+    DEFAULT_CLAUDE_MODEL_CAPABILITIES,
+  );
 
   if (!claudeSettings.enabled) {
     return buildServerProvider({

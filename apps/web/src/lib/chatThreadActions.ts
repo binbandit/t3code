@@ -1,7 +1,9 @@
-import type { ProjectId } from "@t3tools/contracts";
+import { scopeProjectRef } from "@t3tools/client-runtime";
+import type { EnvironmentId, ProjectId, ScopedProjectRef } from "@t3tools/contracts";
 import type { DraftThreadEnvMode } from "../composerDraftStore";
 
 interface ThreadContextLike {
+  environmentId: EnvironmentId;
   projectId: ProjectId;
   branch: string | null;
   worktreePath: string | null;
@@ -13,7 +15,7 @@ interface DraftThreadContextLike extends ThreadContextLike {
 
 interface NewThreadHandler {
   (
-    projectId: ProjectId,
+    projectRef: ScopedProjectRef,
     options?: {
       branch?: string | null;
       worktreePath?: string | null;
@@ -27,27 +29,39 @@ export interface ChatThreadActionContext {
   readonly activeThread: ThreadContextLike | undefined;
   readonly defaultThreadEnvMode: DraftThreadEnvMode;
   readonly handleNewThread: NewThreadHandler;
-  readonly projects: ReadonlyArray<{ readonly id: ProjectId }>;
+  readonly projects: ReadonlyArray<{
+    readonly environmentId: EnvironmentId;
+    readonly id: ProjectId;
+  }>;
 }
 
-export function resolveThreadActionProjectId(context: ChatThreadActionContext): ProjectId | null {
-  return (
-    context.activeThread?.projectId ??
-    context.activeDraftThread?.projectId ??
-    context.projects[0]?.id ??
-    null
-  );
+export function resolveThreadActionProjectRef(
+  context: ChatThreadActionContext,
+): ScopedProjectRef | null {
+  if (context.activeThread) {
+    return scopeProjectRef(context.activeThread.environmentId, context.activeThread.projectId);
+  }
+  if (context.activeDraftThread) {
+    return scopeProjectRef(
+      context.activeDraftThread.environmentId,
+      context.activeDraftThread.projectId,
+    );
+  }
+  const fallbackProject = context.projects[0];
+  return fallbackProject
+    ? scopeProjectRef(fallbackProject.environmentId, fallbackProject.id)
+    : null;
 }
 
 export async function startNewThreadFromContext(
   context: ChatThreadActionContext,
 ): Promise<boolean> {
-  const projectId = resolveThreadActionProjectId(context);
-  if (!projectId) {
+  const projectRef = resolveThreadActionProjectRef(context);
+  if (!projectRef) {
     return false;
   }
 
-  await context.handleNewThread(projectId, {
+  await context.handleNewThread(projectRef, {
     branch: context.activeThread?.branch ?? context.activeDraftThread?.branch ?? null,
     worktreePath:
       context.activeThread?.worktreePath ?? context.activeDraftThread?.worktreePath ?? null,
@@ -61,12 +75,12 @@ export async function startNewThreadFromContext(
 export async function startNewLocalThreadFromContext(
   context: ChatThreadActionContext,
 ): Promise<boolean> {
-  const projectId = resolveThreadActionProjectId(context);
-  if (!projectId) {
+  const projectRef = resolveThreadActionProjectRef(context);
+  if (!projectRef) {
     return false;
   }
 
-  await context.handleNewThread(projectId, {
+  await context.handleNewThread(projectRef, {
     envMode: context.defaultThreadEnvMode,
   });
   return true;
