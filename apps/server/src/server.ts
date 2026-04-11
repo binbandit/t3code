@@ -165,10 +165,7 @@ const ProviderLayerLive = Layer.unwrap(
 
 const PersistenceLayerLive = Layer.empty.pipe(Layer.provideMerge(SqlitePersistenceLayerLive));
 
-const GitTextGenerationLayerLive = RoutingTextGenerationLive.pipe(
-  Layer.provideMerge(GitCoreLive),
-  Layer.provideMerge(GitHubCliLive),
-);
+const GitTextGenerationLayerLive = RoutingTextGenerationLive;
 
 const GitManagerLayerLive = GitManagerLive.pipe(
   Layer.provideMerge(ProjectSetupScriptRunnerLive),
