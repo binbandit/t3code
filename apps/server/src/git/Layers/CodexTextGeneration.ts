@@ -17,8 +17,6 @@ import {
   buildPrContentPrompt,
   buildThreadTitlePrompt,
 } from "../Prompts.ts";
-import { GitCore } from "../Services/GitCore.ts";
-import { GitHubCli } from "../Services/GitHubCli.ts";
 import {
   type BranchNameGenerationInput,
   type TextGenerationShape,
@@ -35,86 +33,6 @@ import {
 
 const CODEX_GIT_TEXT_GENERATION_REASONING_EFFORT = "low";
 const CODEX_TIMEOUT_MS = 180_000;
-const COMMIT_STYLE_EXAMPLE_LIMIT = 10;
-const PR_STYLE_EXAMPLE_LIMIT = 10;
-
-function dedupeStyleExamples(values: ReadonlyArray<string>, limit: number): ReadonlyArray<string> {
-  const deduped: string[] = [];
-  const seen = new Set<string>();
-
-  for (const value of values) {
-    const trimmed = value.trim();
-    if (trimmed.length === 0 || seen.has(trimmed)) {
-      continue;
-    }
-    seen.add(trimmed);
-    deduped.push(trimmed);
-    if (deduped.length >= limit) {
-      break;
-    }
-  }
-
-  return deduped;
-}
-
-function buildCommitStyleGuidance(commitSubjects: ReadonlyArray<string>): string {
-  if (commitSubjects.length === 0) {
-    return [
-      "Repository commit style guidance:",
-      "- No recent commit subjects are available from this repository.",
-      "- Default to Conventional Commits: type(scope): summary",
-      "- Common Conventional Commit types include feat, fix, docs, refactor, perf, test, chore, ci, build, and revert",
-    ].join("\n");
-  }
-
-  return [
-    "Repository commit style guidance:",
-    "- Infer the dominant style from these recent commit subjects and continue it.",
-    "- Common styles to recognize include Conventional Commits, emoji/gitmoji prefixes, emoji + conventional hybrids, and plain imperative summaries.",
-    "- Ignore trailing PR references like (#123); they are merge metadata, not something to invent.",
-    "- If the examples are mixed or unclear, default to Conventional Commits.",
-    "Recent commit subjects:",
-    ...commitSubjects.map((subject) => `- ${subject}`),
-  ].join("\n");
-}
-
-function buildPrStyleGuidance(input: {
-  commitSubjects: ReadonlyArray<string>;
-  prTitles: ReadonlyArray<string>;
-}): string {
-  if (input.prTitles.length === 0 && input.commitSubjects.length === 0) {
-    return [
-      "Repository PR title style guidance:",
-      "- No recent pull request titles or commit subjects are available from this repository.",
-      "- Default the PR title to Conventional Commits: type(scope): summary",
-    ].join("\n");
-  }
-
-  const sections = [
-    "Repository PR title style guidance:",
-    "- Follow the dominant repository title style shown below.",
-    "- Common styles to recognize include Conventional Commits, emoji/gitmoji prefixes, emoji + conventional hybrids, and plain imperative summaries.",
-    "- Do not invent PR numbers, issue numbers, or ticket IDs just because examples contain them.",
-    "- If the examples are mixed or unclear, default to Conventional Commits.",
-  ];
-
-  if (input.prTitles.length > 0) {
-    sections.push("Recent pull request titles:", ...input.prTitles.map((title) => `- ${title}`));
-  } else {
-    sections.push(
-      "- No recent pull request titles are available, so infer the style from recent commit subjects.",
-    );
-  }
-
-  if (input.commitSubjects.length > 0) {
-    sections.push(
-      "Recent commit subjects (supporting context):",
-      ...input.commitSubjects.map((subject) => `- ${subject}`),
-    );
-  }
-
-  return sections.join("\n");
-}
 
 const makeCodexTextGeneration = Effect.gen(function* () {
   const fileSystem = yield* FileSystem.FileSystem;
@@ -122,8 +40,6 @@ const makeCodexTextGeneration = Effect.gen(function* () {
   const commandSpawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   const serverConfig = yield* Effect.service(ServerConfig);
   const serverSettingsService = yield* Effect.service(ServerSettingsService);
-  const gitCore = yield* GitCore;
-  const gitHubCli = yield* GitHubCli;
 
   type MaterializedImageAttachments = {
     readonly imagePaths: ReadonlyArray<string>;
@@ -357,28 +273,6 @@ const makeCodexTextGeneration = Effect.gen(function* () {
     }).pipe(Effect.ensuring(cleanup));
   });
 
-  const readRecentCommitStyleExamples = (cwd: string) =>
-    gitCore
-      .readRecentCommitSubjects({
-        cwd,
-        limit: COMMIT_STYLE_EXAMPLE_LIMIT,
-      })
-      .pipe(
-        Effect.map((subjects) => dedupeStyleExamples(subjects, COMMIT_STYLE_EXAMPLE_LIMIT)),
-        Effect.catch(() => Effect.succeed([])),
-      );
-
-  const readRecentPrTitleExamples = (cwd: string) =>
-    gitHubCli
-      .listRecentPullRequestTitles({
-        cwd,
-        limit: PR_STYLE_EXAMPLE_LIMIT,
-      })
-      .pipe(
-        Effect.map((titles) => dedupeStyleExamples(titles, PR_STYLE_EXAMPLE_LIMIT)),
-        Effect.catch(() => Effect.succeed([])),
-      );
-
   const generateCommitMessage: TextGenerationShape["generateCommitMessage"] = Effect.fn(
     "CodexTextGeneration.generateCommitMessage",
   )(function* (input) {
@@ -389,13 +283,12 @@ const makeCodexTextGeneration = Effect.gen(function* () {
       });
     }
 
-    const commitStyleExamples = yield* readRecentCommitStyleExamples(input.cwd);
     const { prompt, outputSchema } = buildCommitMessagePrompt({
       branch: input.branch,
       stagedSummary: input.stagedSummary,
       stagedPatch: input.stagedPatch,
       includeBranch: input.includeBranch === true,
-      styleGuidance: buildCommitStyleGuidance(commitStyleExamples),
+      styleGuidance: input.styleGuidance,
     });
 
     const generated = yield* runCodexJson({
@@ -425,22 +318,14 @@ const makeCodexTextGeneration = Effect.gen(function* () {
       });
     }
 
-    const [commitStyleExamples, prTitleExamples] = yield* Effect.all(
-      [readRecentCommitStyleExamples(input.cwd), readRecentPrTitleExamples(input.cwd)],
-      {
-        concurrency: "unbounded",
-      },
-    );
     const { prompt, outputSchema } = buildPrContentPrompt({
       baseBranch: input.baseBranch,
       headBranch: input.headBranch,
       commitSummary: input.commitSummary,
       diffSummary: input.diffSummary,
       diffPatch: input.diffPatch,
-      styleGuidance: buildPrStyleGuidance({
-        commitSubjects: commitStyleExamples,
-        prTitles: prTitleExamples,
-      }),
+      styleGuidance: input.styleGuidance,
+      useDefaultTemplate: input.useDefaultTemplate,
     });
 
     const generated = yield* runCodexJson({

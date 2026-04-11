@@ -29,6 +29,11 @@ export interface GitHubRepositoryCloneUrls {
   readonly sshUrl: string;
 }
 
+export interface GitHubPullRequestTextExample {
+  readonly title: string;
+  readonly body: string;
+}
+
 /**
  * GitHubCliShape - Service API for executing GitHub CLI commands.
  */
@@ -52,12 +57,13 @@ export interface GitHubCliShape {
   }) => Effect.Effect<ReadonlyArray<GitHubPullRequestSummary>, GitHubCliError>;
 
   /**
-   * List recent pull request titles to infer repository PR title style.
+   * List recent pull request title/body examples to infer author or repository style.
    */
-  readonly listRecentPullRequestTitles: (input: {
+  readonly listRecentPullRequestExamples: (input: {
     readonly cwd: string;
     readonly limit?: number;
-  }) => Effect.Effect<ReadonlyArray<string>, GitHubCliError>;
+    readonly author?: string | undefined;
+  }) => Effect.Effect<ReadonlyArray<GitHubPullRequestTextExample>, GitHubCliError>;
 
   /**
    * Resolve a pull request by URL, number, or branch-ish identifier.

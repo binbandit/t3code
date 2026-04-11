@@ -2103,6 +2103,41 @@ it.layer(TestLayer)("git integration", (it) => {
         expect(subjects).toEqual([]);
       }),
     );
+
+    it.effect("filters recent commit subjects by exact author identity across all refs", () =>
+      Effect.gen(function* () {
+        const tmp = yield* makeTmpDir();
+        yield* initRepoWithCommit(tmp);
+        yield* git(tmp, ["config", "user.email", "me+test@example.com"]);
+        yield* git(tmp, ["config", "user.name", "Me Plus"]);
+        yield* commitWithDate(
+          tmp,
+          "author.txt",
+          "author\n",
+          "2024-01-03T12:00:00Z",
+          "feat: author style",
+        );
+        yield* git(tmp, ["config", "user.email", "other@example.com"]);
+        yield* git(tmp, ["config", "user.name", "Other User"]);
+        yield* commitWithDate(
+          tmp,
+          "other.txt",
+          "other\n",
+          "2024-01-04T12:00:00Z",
+          "docs: other user change",
+        );
+
+        const core = yield* GitCore;
+        const subjects = yield* core.readRecentCommitSubjects({
+          cwd: tmp,
+          limit: 5,
+          author: "me+test@example.com",
+          scope: "allRefs",
+        });
+
+        expect(subjects).toEqual(["feat: author style"]);
+      }),
+    );
     it.effect("prepareCommitContext truncates oversized staged patches instead of failing", () =>
       Effect.gen(function* () {
         const tmp = yield* makeTmpDir();

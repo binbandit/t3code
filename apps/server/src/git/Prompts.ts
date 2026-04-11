@@ -81,17 +81,27 @@ export interface PrContentPromptInput {
   diffSummary: string;
   diffPatch: string;
   styleGuidance?: string | undefined;
+  useDefaultTemplate?: boolean | undefined;
 }
 
 export function buildPrContentPrompt(input: PrContentPromptInput) {
+  const useDefaultTemplate = input.useDefaultTemplate !== false;
   const prompt = [
     "You write GitHub pull request content.",
     "Return a JSON object with keys: title, body.",
     "Rules:",
     "- title should be concise and specific",
-    "- body must be markdown and include headings '## Summary' and '## Testing'",
-    "- under Summary, provide short bullet points",
-    "- under Testing, include bullet points with concrete checks or 'Not run' where appropriate",
+    ...(useDefaultTemplate
+      ? [
+          "- body must be markdown and include headings '## Summary' and '## Testing'",
+          "- under Summary, provide short bullet points",
+          "- under Testing, include bullet points with concrete checks or 'Not run' where appropriate",
+        ]
+      : [
+          "- body must be markdown",
+          "- follow the provided style guidance for title, tone, and body structure",
+          "- if the examples do not show a testing section, do not force one",
+        ]),
     ...(input.styleGuidance ? ["", input.styleGuidance] : []),
     "",
     `Base branch: ${input.baseBranch}`,

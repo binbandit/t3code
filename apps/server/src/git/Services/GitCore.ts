@@ -59,6 +59,10 @@ export interface GitPreparedCommitContext {
 export interface GitRecentCommitSubjectsInput {
   readonly cwd: string;
   readonly limit?: number | undefined;
+  /** Exact author identity (email or name) to match when sampling commit history. */
+  readonly author?: string | undefined;
+  /** Which commit graph slice to sample from. */
+  readonly scope?: "defaultHistory" | "allRefs" | undefined;
 }
 
 export interface ExecuteGitProgress {

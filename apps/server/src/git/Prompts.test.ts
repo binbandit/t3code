@@ -85,6 +85,7 @@ describe("buildPrContentPrompt", () => {
     expect(result.prompt).toContain("3 files changed");
     expect(result.prompt).toContain("Diff patch:");
     expect(result.prompt).toContain("export function login()");
+    expect(result.prompt).toContain("include headings '## Summary' and '## Testing'");
   });
 
   it("includes optional repository PR style guidance when provided", () => {
@@ -96,10 +97,15 @@ describe("buildPrContentPrompt", () => {
       diffPatch: "diff",
       styleGuidance:
         "Repository PR title style guidance:\n- Follow the dominant repository title style shown below.",
+      useDefaultTemplate: false,
     });
 
     expect(result.prompt).toContain("Repository PR title style guidance:");
     expect(result.prompt).toContain("Follow the dominant repository title style shown below.");
+    expect(result.prompt).toContain(
+      "if the examples do not show a testing section, do not force one",
+    );
+    expect(result.prompt).not.toContain("include headings '## Summary' and '## Testing'");
   });
 });
 

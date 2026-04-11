@@ -8,6 +8,7 @@ import {
   type GitHubRepositoryCloneUrls,
   type GitHubCliShape,
   type GitHubPullRequestSummary,
+  type GitHubPullRequestTextExample,
 } from "../Services/GitHubCli.ts";
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -110,9 +111,10 @@ const RawGitHubRepositoryCloneUrlsSchema = Schema.Struct({
   sshUrl: TrimmedNonEmptyString,
 });
 
-const RawGitHubPullRequestTitleListSchema = Schema.Array(
+const RawGitHubPullRequestTextExampleListSchema = Schema.Array(
   Schema.Struct({
     title: TrimmedNonEmptyString,
+    body: Schema.optional(Schema.NullOr(Schema.String)),
   }),
 );
 
@@ -150,12 +152,21 @@ function normalizeRepositoryCloneUrls(
   };
 }
 
+function normalizePullRequestTextExample(
+  raw: Schema.Schema.Type<typeof RawGitHubPullRequestTextExampleListSchema>[number],
+): GitHubPullRequestTextExample {
+  return {
+    title: raw.title,
+    body: raw.body?.trim() ?? "",
+  };
+}
+
 function decodeGitHubJson<S extends Schema.Top>(
   raw: string,
   schema: S,
   operation:
     | "listOpenPullRequests"
-    | "listRecentPullRequestTitles"
+    | "listRecentPullRequestExamples"
     | "getPullRequest"
     | "getRepositoryCloneUrls",
   invalidDetail: string,
@@ -214,7 +225,7 @@ const makeGitHubCli = Effect.sync(() => {
         ),
         Effect.map((pullRequests) => pullRequests.map(normalizePullRequestSummary)),
       ),
-    listRecentPullRequestTitles: (input) =>
+    listRecentPullRequestExamples: (input) =>
       execute({
         cwd: input.cwd,
         args: [
@@ -222,10 +233,11 @@ const makeGitHubCli = Effect.sync(() => {
           "list",
           "--state",
           "all",
+          ...(input.author ? ["--author", input.author] : []),
           "--limit",
           String(input.limit ?? 10),
           "--json",
-          "title",
+          "title,body",
         ],
         timeoutMs: STYLE_DISCOVERY_TIMEOUT_MS,
       }).pipe(
@@ -235,12 +247,12 @@ const makeGitHubCli = Effect.sync(() => {
             ? Effect.succeed([])
             : decodeGitHubJson(
                 raw,
-                RawGitHubPullRequestTitleListSchema,
-                "listRecentPullRequestTitles",
-                "GitHub CLI returned invalid PR title list JSON.",
+                RawGitHubPullRequestTextExampleListSchema,
+                "listRecentPullRequestExamples",
+                "GitHub CLI returned invalid PR example list JSON.",
               ),
         ),
-        Effect.map((pullRequests) => pullRequests.map((pullRequest) => pullRequest.title)),
+        Effect.map((pullRequests) => pullRequests.map(normalizePullRequestTextExample)),
       ),
     getPullRequest: (input) =>
       execute({

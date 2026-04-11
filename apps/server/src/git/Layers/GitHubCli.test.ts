@@ -106,12 +106,18 @@ layer("GitHubCliLive", (it) => {
     }),
   );
 
-  it.effect("lists recent pull request titles for style discovery", () =>
+  it.effect("lists recent pull request examples for style discovery", () =>
     Effect.gen(function* () {
       mockedRunProcess.mockResolvedValueOnce({
         stdout: JSON.stringify([
-          { title: "feat(web): add command palette" },
-          { title: "Fix Linux desktop Codex CLI detection at startup" },
+          {
+            title: "feat(web): add command palette",
+            body: "## Summary\n- Add command palette",
+          },
+          {
+            title: "Fix Linux desktop Codex CLI detection at startup",
+            body: "",
+          },
         ]),
         stderr: "",
         code: 0,
@@ -121,19 +127,26 @@ layer("GitHubCliLive", (it) => {
 
       const result = yield* Effect.gen(function* () {
         const gh = yield* GitHubCli;
-        return yield* gh.listRecentPullRequestTitles({
+        return yield* gh.listRecentPullRequestExamples({
           cwd: "/repo",
+          author: "@me",
           limit: 2,
         });
       });
 
       assert.deepStrictEqual(result, [
-        "feat(web): add command palette",
-        "Fix Linux desktop Codex CLI detection at startup",
+        {
+          title: "feat(web): add command palette",
+          body: "## Summary\n- Add command palette",
+        },
+        {
+          title: "Fix Linux desktop Codex CLI detection at startup",
+          body: "",
+        },
       ]);
       expect(mockedRunProcess).toHaveBeenCalledWith(
         "gh",
-        ["pr", "list", "--state", "all", "--limit", "2", "--json", "title"],
+        ["pr", "list", "--state", "all", "--author", "@me", "--limit", "2", "--json", "title,body"],
         expect.objectContaining({ cwd: "/repo", timeoutMs: 5_000 }),
       );
     }),

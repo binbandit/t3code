@@ -1674,10 +1674,21 @@ export const makeGitCore = Effect.fn("makeGitCore")(function* (options?: {
   const readRecentCommitSubjects: GitCoreShape["readRecentCommitSubjects"] = (input) =>
     Effect.gen(function* () {
       const limit = Math.max(1, input.limit ?? 10);
-      const historyRef = yield* resolveCommitStyleHistoryRef(input.cwd).pipe(
-        Effect.catch(() => Effect.succeed("HEAD")),
-      );
-      const args = ["log", "--format=%s", "--no-merges", "--max-count", String(limit), historyRef];
+      const args = ["log", "--format=%s", "--no-merges", "--max-count", String(limit)];
+
+      if (input.author?.trim()) {
+        args.push(`--author=${input.author.trim()}`);
+      }
+
+      if (input.scope === "allRefs") {
+        args.push("--all");
+      } else {
+        const historyRef = yield* resolveCommitStyleHistoryRef(input.cwd).pipe(
+          Effect.catch(() => Effect.succeed("HEAD")),
+        );
+        args.push(historyRef);
+      }
+
       const result = yield* executeGit("GitCore.readRecentCommitSubjects", input.cwd, args, {
         allowNonZeroExit: true,
         timeoutMs: STYLE_DISCOVERY_TIMEOUT_MS,
