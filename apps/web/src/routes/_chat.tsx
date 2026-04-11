@@ -1,4 +1,3 @@
-import { scopeProjectRef } from "@t3tools/client-runtime";
 import { Outlet, createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect } from "react";
 
@@ -8,6 +7,10 @@ import {
   resolveInitialServerAuthGateState,
 } from "../environments/primary";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
+import {
+  startNewLocalThreadFromContext,
+  startNewThreadFromContext,
+} from "../lib/chatThreadActions";
 import { isTerminalFocused } from "../lib/terminalFocus";
 import { resolveShortcutCommand } from "../keybindings";
 import { selectThreadTerminalState, useTerminalStateStore } from "../terminalStateStore";
@@ -49,22 +52,17 @@ function ChatRouteGlobalShortcuts() {
         return;
       }
 
-      const projectRef = activeThread
-        ? scopeProjectRef(activeThread.environmentId, activeThread.projectId)
-        : activeDraftThread && routeThreadRef
-          ? scopeProjectRef(routeThreadRef.environmentId, activeDraftThread.projectId)
-          : defaultProjectRef;
-      if (!projectRef) {
-        return;
-      }
-
       if (command === "chat.newLocal") {
         event.preventDefault();
         event.stopPropagation();
-        void handleNewThread(projectRef, {
-          envMode: resolveSidebarNewThreadEnvMode({
+        void startNewLocalThreadFromContext({
+          activeDraftThread,
+          activeThread,
+          defaultProjectRef,
+          defaultThreadEnvMode: resolveSidebarNewThreadEnvMode({
             defaultEnvMode: appSettings.defaultThreadEnvMode,
           }),
+          handleNewThread,
         });
         return;
       }
@@ -72,11 +70,14 @@ function ChatRouteGlobalShortcuts() {
       if (command === "chat.new") {
         event.preventDefault();
         event.stopPropagation();
-        void handleNewThread(projectRef, {
-          branch: activeThread?.branch ?? activeDraftThread?.branch ?? null,
-          worktreePath: activeThread?.worktreePath ?? activeDraftThread?.worktreePath ?? null,
-          envMode:
-            activeDraftThread?.envMode ?? (activeThread?.worktreePath ? "worktree" : "local"),
+        void startNewThreadFromContext({
+          activeDraftThread,
+          activeThread,
+          defaultProjectRef,
+          defaultThreadEnvMode: resolveSidebarNewThreadEnvMode({
+            defaultEnvMode: appSettings.defaultThreadEnvMode,
+          }),
+          handleNewThread,
         });
       }
     };
@@ -92,7 +93,6 @@ function ChatRouteGlobalShortcuts() {
     handleNewThread,
     keybindings,
     defaultProjectRef,
-    routeThreadRef,
     selectedThreadKeysSize,
     terminalOpen,
     appSettings.defaultThreadEnvMode,

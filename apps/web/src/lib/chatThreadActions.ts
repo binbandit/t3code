@@ -29,12 +29,9 @@ type NewThreadOptions = NonNullable<Parameters<NewThreadHandler>[1]>;
 export interface ChatThreadActionContext {
   readonly activeDraftThread: DraftThreadContextLike | null;
   readonly activeThread: ThreadContextLike | undefined;
+  readonly defaultProjectRef: ScopedProjectRef | null;
   readonly defaultThreadEnvMode: DraftThreadEnvMode;
   readonly handleNewThread: NewThreadHandler;
-  readonly projects: ReadonlyArray<{
-    readonly environmentId: EnvironmentId;
-    readonly id: ProjectId;
-  }>;
 }
 
 export function resolveThreadActionProjectRef(
@@ -49,10 +46,7 @@ export function resolveThreadActionProjectRef(
       context.activeDraftThread.projectId,
     );
   }
-  const fallbackProject = context.projects[0];
-  return fallbackProject
-    ? scopeProjectRef(fallbackProject.environmentId, fallbackProject.id)
-    : null;
+  return context.defaultProjectRef;
 }
 
 function buildContextualThreadOptions(context: ChatThreadActionContext): NewThreadOptions {

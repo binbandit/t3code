@@ -25,7 +25,6 @@ import { useCommandPaletteStore } from "../commandPaletteStore";
 import { useHandleNewThread } from "../hooks/useHandleNewThread";
 import { useSettings } from "../hooks/useSettings";
 import {
-  startNewLocalThreadFromContext,
   startNewThreadInProjectFromContext,
   startNewThreadFromContext,
 } from "../lib/chatThreadActions";
@@ -109,10 +108,7 @@ export function CommandPalette({ children }: { children: ReactNode }) {
 
   return (
     <ComposerHandleContext.Provider value={composerHandleRef}>
-      <CommandDialog
-        open={open}
-        onOpenChange={setOpen}
-      >
+      <CommandDialog open={open} onOpenChange={setOpen}>
         {children}
         <CommandPaletteDialog />
       </CommandDialog>
@@ -145,7 +141,8 @@ function OpenCommandPaletteDialog() {
   const deferredQuery = useDeferredValue(query);
   const isActionsOnly = deferredQuery.startsWith(">");
   const settings = useSettings();
-  const { activeDraftThread, activeThread, handleNewThread } = useHandleNewThread();
+  const { activeDraftThread, activeThread, defaultProjectRef, handleNewThread } =
+    useHandleNewThread();
   const projects = useStore(useShallow(selectProjectsAcrossEnvironments));
   const threads = useStore(useShallow(selectSidebarThreadsAcrossEnvironments));
   const keybindings = useServerKeybindings();
@@ -225,36 +222,22 @@ function OpenCommandPaletteDialog() {
             {
               activeDraftThread,
               activeThread,
+              defaultProjectRef,
               defaultThreadEnvMode: settings.defaultThreadEnvMode,
               handleNewThread,
-              projects,
             },
             scopeProjectRef(project.environmentId, project.id),
           );
         },
       }),
-    [activeDraftThread, activeThread, handleNewThread, projects, settings.defaultThreadEnvMode],
-  );
-
-  const projectFreshThreadItems = useMemo(
-    () =>
-      buildProjectActionItems({
-        projects,
-        valuePrefix: "new-fresh-thread-in",
-        icon: (project) => (
-          <ProjectFavicon
-            environmentId={project.environmentId}
-            cwd={project.cwd}
-            className={ITEM_ICON_CLASS}
-          />
-        ),
-        runProject: async (project) => {
-          await handleNewThread(scopeProjectRef(project.environmentId, project.id), {
-            envMode: settings.defaultThreadEnvMode,
-          });
-        },
-      }),
-    [handleNewThread, projects, settings.defaultThreadEnvMode],
+    [
+      activeDraftThread,
+      activeThread,
+      defaultProjectRef,
+      handleNewThread,
+      projects,
+      settings.defaultThreadEnvMode,
+    ],
   );
 
   const allThreadItems = useMemo(
@@ -323,9 +306,9 @@ function OpenCommandPaletteDialog() {
           await startNewThreadFromContext({
             activeDraftThread,
             activeThread,
+            defaultProjectRef,
             defaultThreadEnvMode: settings.defaultThreadEnvMode,
             handleNewThread,
-            projects,
           });
         },
       });
