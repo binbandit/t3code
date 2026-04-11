@@ -1677,6 +1677,9 @@ export const makeGitCore = Effect.fn("makeGitCore")(function* (options?: {
       const args = ["log", "--format=%s", "--no-merges", "--max-count", String(limit)];
 
       if (input.author?.trim()) {
+        // `git log --author` matches regexes by default, so force fixed-string matching
+        // to preserve the service contract's exact author identity semantics.
+        args.push("-F");
         args.push(`--author=${input.author.trim()}`);
       }
 

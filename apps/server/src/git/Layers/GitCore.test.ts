@@ -2108,8 +2108,8 @@ it.layer(TestLayer)("git integration", (it) => {
       Effect.gen(function* () {
         const tmp = yield* makeTmpDir();
         yield* initRepoWithCommit(tmp);
-        yield* git(tmp, ["config", "user.email", "me+test@example.com"]);
-        yield* git(tmp, ["config", "user.name", "Me Plus"]);
+        yield* git(tmp, ["config", "user.email", "me.name@example.com"]);
+        yield* git(tmp, ["config", "user.name", "Me Name"]);
         yield* commitWithDate(
           tmp,
           "author.txt",
@@ -2117,21 +2117,21 @@ it.layer(TestLayer)("git integration", (it) => {
           "2024-01-03T12:00:00Z",
           "feat: author style",
         );
-        yield* git(tmp, ["config", "user.email", "other@example.com"]);
-        yield* git(tmp, ["config", "user.name", "Other User"]);
+        yield* git(tmp, ["config", "user.email", "meXname@exampleYcom"]);
+        yield* git(tmp, ["config", "user.name", "False Positive"]);
         yield* commitWithDate(
           tmp,
           "other.txt",
           "other\n",
           "2024-01-04T12:00:00Z",
-          "docs: other user change",
+          "docs: regex false positive",
         );
 
         const core = yield* GitCore;
         const subjects = yield* core.readRecentCommitSubjects({
           cwd: tmp,
           limit: 5,
-          author: "me+test@example.com",
+          author: "me.name@example.com",
           scope: "allRefs",
         });
 
