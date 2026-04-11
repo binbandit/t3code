@@ -54,7 +54,7 @@ export function normalizeSearchText(value: string): string {
 export function buildProjectActionItems(input: {
   projects: ReadonlyArray<Project>;
   valuePrefix: string;
-  icon: ReactNode;
+  icon: (project: Project) => ReactNode;
   runProject: (project: Project) => Promise<void>;
 }): CommandPaletteActionItem[] {
   return input.projects.map((project) => ({
@@ -63,7 +63,7 @@ export function buildProjectActionItems(input: {
     searchTerms: [project.name, project.cwd],
     title: project.name,
     description: project.cwd,
-    icon: input.icon,
+    icon: input.icon(project),
     run: async () => {
       await input.runProject(project);
     },

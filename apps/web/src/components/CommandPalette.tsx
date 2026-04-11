@@ -7,7 +7,6 @@ import {
   ArrowDownIcon,
   ArrowLeftIcon,
   ArrowUpIcon,
-  FolderIcon,
   MessageSquareIcon,
   SettingsIcon,
   SquarePenIcon,
@@ -16,6 +15,7 @@ import {
   useDeferredValue,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type KeyboardEvent,
   type ReactNode,
@@ -54,6 +54,7 @@ import {
   RECENT_THREAD_LIMIT,
 } from "./CommandPalette.logic";
 import { CommandPaletteResults } from "./CommandPaletteResults";
+import { ProjectFavicon } from "./ProjectFavicon";
 import { useServerKeybindings } from "../rpc/serverState";
 import { resolveShortcutCommand } from "../keybindings";
 import {
@@ -66,12 +67,15 @@ import {
 } from "./ui/command";
 import { Kbd, KbdGroup } from "./ui/kbd";
 import { toastManager } from "./ui/toast";
+import { ComposerHandleContext, useComposerHandleContext } from "../composerHandleContext";
+import type { ChatComposerHandle } from "./chat/ChatComposer";
 
 export function CommandPalette({ children }: { children: ReactNode }) {
   const open = useCommandPaletteStore((store) => store.open);
   const setOpen = useCommandPaletteStore((store) => store.setOpen);
   const toggleOpen = useCommandPaletteStore((store) => store.toggleOpen);
   const keybindings = useServerKeybindings();
+  const composerHandleRef = useRef<ChatComposerHandle | null>(null);
   const routeTarget = useParams({
     strict: false,
     select: (params) => resolveThreadRouteTarget(params),
@@ -104,10 +108,15 @@ export function CommandPalette({ children }: { children: ReactNode }) {
   }, [keybindings, terminalOpen, toggleOpen]);
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
-      {children}
-      <CommandPaletteDialog />
-    </CommandDialog>
+    <ComposerHandleContext.Provider value={composerHandleRef}>
+      <CommandDialog
+        open={open}
+        onOpenChange={setOpen}
+      >
+        {children}
+        <CommandPaletteDialog />
+      </CommandDialog>
+    </ComposerHandleContext.Provider>
   );
 }
 
@@ -131,6 +140,7 @@ function CommandPaletteDialog() {
 function OpenCommandPaletteDialog() {
   const navigate = useNavigate();
   const setOpen = useCommandPaletteStore((store) => store.setOpen);
+  const composerHandleRef = useComposerHandleContext();
   const [query, setQuery] = useState("");
   const deferredQuery = useDeferredValue(query);
   const isActionsOnly = deferredQuery.startsWith(">");
@@ -186,7 +196,13 @@ function OpenCommandPaletteDialog() {
       buildProjectActionItems({
         projects,
         valuePrefix: "project",
-        icon: <FolderIcon className={ITEM_ICON_CLASS} />,
+        icon: (project) => (
+          <ProjectFavicon
+            environmentId={project.environmentId}
+            cwd={project.cwd}
+            className={ITEM_ICON_CLASS}
+          />
+        ),
         runProject: openProjectFromSearch,
       }),
     [openProjectFromSearch, projects],
@@ -197,7 +213,13 @@ function OpenCommandPaletteDialog() {
       buildProjectActionItems({
         projects,
         valuePrefix: "new-thread-in",
-        icon: <FolderIcon className={ITEM_ICON_CLASS} />,
+        icon: (project) => (
+          <ProjectFavicon
+            environmentId={project.environmentId}
+            cwd={project.cwd}
+            className={ITEM_ICON_CLASS}
+          />
+        ),
         runProject: async (project) => {
           await startNewThreadInProjectFromContext(
             {
@@ -219,7 +241,13 @@ function OpenCommandPaletteDialog() {
       buildProjectActionItems({
         projects,
         valuePrefix: "new-fresh-thread-in",
-        icon: <FolderIcon className={ITEM_ICON_CLASS} />,
+        icon: (project) => (
+          <ProjectFavicon
+            environmentId={project.environmentId}
+            cwd={project.cwd}
+            className={ITEM_ICON_CLASS}
+          />
+        ),
         runProject: async (project) => {
           await handleNewThread(scopeProjectRef(project.environmentId, project.id), {
             envMode: settings.defaultThreadEnvMode,
@@ -301,29 +329,6 @@ function OpenCommandPaletteDialog() {
           });
         },
       });
-
-      actionItems.push({
-        kind: "action",
-        value: "action:new-fresh-thread",
-        searchTerms: ["new thread", "chat", "create", settings.defaultThreadEnvMode],
-        title: (
-          <>
-            New {settings.defaultThreadEnvMode} thread in{" "}
-            <span className="font-semibold">{activeProjectTitle}</span>
-          </>
-        ),
-        icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
-        shortcutCommand: "chat.newLocal",
-        run: async () => {
-          await startNewLocalThreadFromContext({
-            activeDraftThread,
-            activeThread,
-            defaultThreadEnvMode: settings.defaultThreadEnvMode,
-            handleNewThread,
-            projects,
-          });
-        },
-      });
     }
 
     actionItems.push({
@@ -334,23 +339,6 @@ function OpenCommandPaletteDialog() {
       icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
       addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
       groups: [{ value: "projects", label: "Projects", items: projectThreadItems }],
-    });
-
-    actionItems.push({
-      kind: "submenu",
-      value: "action:new-fresh-thread-in",
-      searchTerms: [
-        "new thread",
-        "project",
-        "pick",
-        "choose",
-        "select",
-        settings.defaultThreadEnvMode,
-      ],
-      title: `New ${settings.defaultThreadEnvMode} thread in...`,
-      icon: <SquarePenIcon className={ITEM_ICON_CLASS} />,
-      addonIcon: <SquarePenIcon className={ADDON_ICON_CLASS} />,
-      groups: [{ value: "projects", label: "Projects", items: projectFreshThreadItems }],
     });
   }
 
@@ -410,6 +398,10 @@ function OpenCommandPaletteDialog() {
       aria-label="Command palette"
       className="overflow-hidden p-0"
       data-testid="command-palette"
+      finalFocus={() => {
+        composerHandleRef?.current?.focusAtEnd();
+        return false;
+      }}
     >
       <Command
         key={viewStack.length}
